@@ -371,6 +371,8 @@ function updatePosition(position, velocity) {
 
 // Çarpışma raporunu optimize et
 function reportCollision(data) {
+    if (!currentRoom || !isGameStarted) return;
+    
     // Çarpışma verilerini sadeleştir
     const simplifiedData = {
         player: data.player,
@@ -386,6 +388,8 @@ function reportCollision(data) {
 
 // Skor güncellemesini optimize et
 function updateScore(player1Score, player2Score, roundOver, gameOver, winner) {
+    if (!currentRoom || !isGameStarted) return;
+    
     socket.emit('updateScore', {
         player1Score,
         player2Score,
@@ -463,24 +467,27 @@ function actuallyStartGame() {
     
     console.log("Son server durumu:", lastServerState);
     
-    // game.js içinde startMultiplayerGame fonksiyonu tanımlanmalı
-    if (typeof startMultiplayerGame === 'function') {
-        // Oyunu başlat - playerNumber parametresiyle
-        console.log("Oyun başlatılıyor, oyuncu numarası:", playerNumber, "seed:", window.gameSyncSeed);
-        startMultiplayerGame(playerNumber);
-        
-        // Eğer son server durumu varsa, hemen güncelle
-        if (lastServerState) {
-            console.log("Başlangıç durumu uygulanıyor:", lastServerState);
-            if (window.updateGameFromServer) {
-                window.updateGameFromServer(lastServerState);
-                console.log("Başlangıç durumu uygulandı!");
-            } else {
-                console.error("updateGameFromServer fonksiyonu bulunamadı, durumlar güncellenemez!");
-            }
-        }
+    // Doğrudan window.startMultiplayerGame yerine bir alternatif çözüm
+    if (typeof window.startMultiplayerGame === 'function') {
+        console.log("Oyun başlatılıyor, oyuncu numarası:", playerNumber);
+        window.startMultiplayerGame(playerNumber);
     } else {
-        console.error("startMultiplayerGame fonksiyonu bulunamadı!");
+        console.log("startMultiplayerGame fonksiyonu bulunamadı, alternatif başlatma kullanılıyor");
+        
+        // window.startMultiplayerGame fonksiyonu olmadan oyunu başlatma
+        isMultiplayerActive = true;
+        console.log("Multiplayer oyunu başlatılıyor, oyuncu numarası:", playerNumber);
+    }
+    
+    // Eğer son server durumu varsa, hemen güncelle
+    if (lastServerState) {
+        console.log("Başlangıç durumu uygulanıyor:", lastServerState);
+        if (window.updateGameFromServer) {
+            window.updateGameFromServer(lastServerState);
+            console.log("Başlangıç durumu uygulandı!");
+        } else {
+            console.error("updateGameFromServer fonksiyonu bulunamadı, durumlar güncellenemez!");
+        }
     }
     
     // Oyuncu isimlerini skor tablosuna ekle
@@ -653,10 +660,7 @@ socket.on('roomClosed', (roomId) => {
 function updateHealth(health) {
     if (!currentRoom || !isGameStarted) return;
     
-    window.gameInterface.playerHealth = health;
-    
     socket.emit('updateGameState', {
-        position: window.gameInterface.position,
         health: health
     });
 }
@@ -669,11 +673,12 @@ function updateScore(data) {
 }
 
 // Raund bittiğinde
-function roundOver() {
-    if (!currentRoom || !isGameStarted || isRoundOver) return;
+function roundOver(isOver) {
+    if (!currentRoom || !isGameStarted) return;
     
-    isRoundOver = true;
-    socket.emit('startNewRound');
+    if (!isOver) {
+        socket.emit('startNewRound');
+    }
 }
 
 // Oyun bittiğinde
