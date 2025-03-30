@@ -1,0 +1,23 @@
+{
+  "name": "mini-arena-game",
+  "version": "1.0.0",
+  "description": "Mini Arena Futbol Oyunu - Online Multiplayer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "keywords": ["game", "multiplayer", "socket.io", "physics", "matter.js"],
+  "author": "",
+  "license": "ISC"
+}
