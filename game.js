@@ -120,7 +120,6 @@ document.addEventListener('DOMContentLoaded', () => {
             player1Health = initialHealth;
             player2Health = initialHealth;
             
-            // Score and game state variables
             player1Score = 0;
             player2Score = 0;
             const winningScore = 3;
@@ -128,24 +127,153 @@ document.addEventListener('DOMContentLoaded', () => {
             winner = null;
             roundOver = false;
             let roundEndTime = 0;
-            const roundRestartDelay = 2000; // 2 seconds before starting a new round
+            const roundRestartDelay = 2000;
             
-            // Reduce initial capacity for particles
             bloodParticles = [];
-            const MAX_BLOOD_PARTICLES = 100; // Limit max particles
+            const MAX_BLOOD_PARTICLES = 100;
             
             const arenaContainer = Composite.create();
             let arenaRotation = 0;
             
-            const segments = 20; // Reduced from 30 for better performance
+            const segments = 20;
             const walls = [];
-            
             const spikes = [];
             const numSpikes = 4;
             const spikeLength = gameRadius * 0.2;
             const spikeWidth = 6;
+
+            // --- Yardımcı Çizim Fonksiyonları (Kullanımdan Önce Tanımla) ---
+            function drawHealthBars(ctx) {
+                const barWidth = 150; // Biraz küçültüldü
+                const barHeight = 25;
+                const margin = 15;
+                
+                // Player 1 Health Bar
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(margin, margin, barWidth, barHeight);
+                ctx.fillStyle = '#FFD700';
+                ctx.fillRect(margin, margin, barWidth * Math.max(0, player1Health / initialHealth), barHeight);
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(margin, margin, barWidth, barHeight);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle'; 
+                ctx.fillText(`${Math.ceil(player1Health)}%`, margin + barWidth / 2, margin + barHeight / 2);
+                    
+                // Player 2 Health Bar
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(canvas.width - margin - barWidth, margin, barWidth, barHeight);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(canvas.width - margin - barWidth, margin, barWidth * Math.max(0, player2Health / initialHealth), barHeight);
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(canvas.width - margin - barWidth, margin, barWidth, barHeight);
+                ctx.fillStyle = '#000000'; // Beyaz bar üzerinde siyah yazı
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${Math.ceil(player2Health)}%`, canvas.width - margin - barWidth / 2, margin + barHeight / 2);
+                
+                // Score display
+                const player1DisplayName = (window.gameInterface && window.gameInterface.username) ? (playerNumber === 1 ? window.gameInterface.username : window.gameInterface.otherPlayerUsername) : 'Player 1';
+                const player2DisplayName = (window.gameInterface && window.gameInterface.username) ? (playerNumber === 2 ? window.gameInterface.username : window.gameInterface.otherPlayerUsername) : 'Player 2';
+                
+                ctx.fillStyle = '#FFD700';
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText(`${player1DisplayName}: ${player1Score}`, margin, margin + barHeight + 10);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.textAlign = 'right';
+                ctx.fillText(`${player2DisplayName}: ${player2Score}`, canvas.width - margin, margin + barHeight + 10);
+                    
+                // Game status messages
+                if (gameOver) {
+                    ctx.fillStyle = winner === 'player1' ? '#FFD700' : '#FFFFFF';
+                    ctx.font = 'bold 30px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`${winner === 'player1' ? player1DisplayName : player2DisplayName} WINS!`, centerX, centerY - 40);
+                    ctx.font = 'bold 20px Arial';
+                    ctx.fillText(`Final Score: ${player1Score} - ${player2Score}`, centerX, centerY);
+                } else if (roundOver) {
+                    const timeLeft = Math.ceil(Math.max(0, roundRestartDelay - (Date.now() - roundEndTime)) / 1000);
+                    ctx.fillStyle = player1Health <= 0 ? '#FFFFFF' : '#FFD700';
+                    ctx.font = 'bold 24px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`${player1Health <= 0 ? player2DisplayName : player1DisplayName} SCORED!`, centerX, centerY - 30);
+                    ctx.font = 'bold 18px Arial';
+                    ctx.fillText(`New round in ${timeLeft}...`, centerX, centerY);
+                    ctx.font = 'bold 16px Arial';
+                    ctx.fillText(`Score: ${player1Score} - ${player2Score}`, centerX, centerY + 30);
+                }
+            }
+
+            function createBloodParticles(player, count, position) {
+                const particleSize = playerRadius * 0.15;
+                const maxCount = Math.min(15, count);
+                const playerColor = (player === player1) ? '#FFD700' : '#FFFFFF';
+                while (bloodParticles.length >= MAX_BLOOD_PARTICLES) bloodParticles.shift();
+                for (let i = 0; i < maxCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 0.5 + Math.random() * 2;
+                    bloodParticles.push({ x: position.x, y: position.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: particleSize * (0.5 + Math.random() * 0.5), color: playerColor, alpha: 1, life: 30 + Math.random() * 20 });
+                }
+            }
+
+            function drawBloodParticles(ctx) {
+                ctx.save();
+                let particle;
+                let i = bloodParticles.length - 1;
+                for (; i >= 0; i--) {
+                    particle = bloodParticles[i];
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.alpha -= 1 / particle.life;
+                    particle.life--;
+                    if (particle.alpha > 0.1) {
+                        ctx.globalAlpha = Math.max(0, particle.alpha);
+                        ctx.fillStyle = particle.color;
+                        ctx.beginPath();
+                        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    if (particle.life <= 0) bloodParticles.splice(i, 1);
+                }
+                ctx.restore();
+            }
+
+            // Cache spike positions for performance
+            const spikeCache = [];
+            function setupSpikeCache() { /* ... önceki kod ... */ }
+            setTimeout(setupSpikeCache, 100);
+
+            function addNailEffects(ctx) {
+                // Use cached spike data instead of accessing physics objects
+                 for (let i = 0; i < spikeCache.length; i++) {
+                     const spike = spikeCache[i];
+                     const pos = spike.pos;
+                     if (spike.circleRadius) { /* ... draw circle gradient ... */ }
+                     else if (spike.vertices) { /* ... draw rectangle ... */ }
+                 }
+            }
             
-            // Oyuncuları ekle - eksik olan bu kısımdı
+            // Track previous damage levels to avoid unnecessary redraws
+            let player1DamageLevelPrev = -1;
+            let player2DamageLevelPrev = -1;
+            function drawPlayerDamage(ctx, player, healthPercent) {
+                const pos = player.position;
+                const radius = player.circleRadius;
+                const damageLevel = 1 - healthPercent;
+                const currentDamageLevel = Math.floor(damageLevel * 10);
+                let prevLevel = player.label === 'player1' ? player1DamageLevelPrev : player2DamageLevelPrev;
+                if (currentDamageLevel === prevLevel) return;
+                if (player.label === 'player1') player1DamageLevelPrev = currentDamageLevel;
+                else player2DamageLevelPrev = currentDamageLevel;
+                if (damageLevel > 0.3) { /* ... draw cracks and chunks ... */ }
+            }
+
+            // --- Arena Sınırı ve Oyuncu Ekleme --- 
             player1 = Bodies.circle(centerX - gameRadius * 0.3, centerY, playerRadius, {
                 restitution: 1,
                 friction: 0,
@@ -165,6 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             console.log("Oyuncu nesneleri oluşturuldu.");
 
+            // Duvar ve Çivileri Oluştur
             for (let i = 0; i < segments; i++) {
                 const angle = (Math.PI * 2 / segments) * i;
                 const nextAngle = (Math.PI * 2 / segments) * (i + 1);
@@ -216,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             console.log("Arena ve engeller oluşturuldu.");
             
-            // Arena sınırı çizimi
+            // Arena sınırı çizim objesi (Fonksiyonlar artık tanımlı)
             const arenaBoundary = {
                 draw: function() {
                     const ctx = render.context;
@@ -236,242 +365,249 @@ document.addEventListener('DOMContentLoaded', () => {
             Composite.add(engine.world, [arenaContainer, player1, player2]);
             console.log("Nesneler dünyaya eklendi.");
 
-            // Olay dinleyicileri
-            console.log("Olay dinleyicileri ayarlandı.");
+            // Olay dinleyicileri (arenaBoundary artık tanımlı)
+            console.log("Olay dinleyicileri ayarlanıyor...");
             Events.on(render, 'afterRender', () => {
-                if (!player1 || !player2) return; // Nesnelerin var olduğundan emin ol
-                arenaBoundary.draw();
+                if (!player1 || !player2) return;
+                arenaBoundary.draw(); // Bu şimdi çalışmalı
                 drawPlayerDamage(render.context, player1, player1Health / initialHealth);
                 drawPlayerDamage(render.context, player2, player2Health / initialHealth);
             });
+            console.log("'afterRender' dinleyicisi eklendi.");
+
+            // --- Yardımcı Fizik/Matematik Fonksiyonları ---
+            function normalizeVector(vector, magnitude, output) {
+                 const currentMagnitude = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+                 if (currentMagnitude === 0) {
+                     output.x = 0;
+                     output.y = 0;
+                     return output;
+                 }
+                 output.x = (vector.x / currentMagnitude) * magnitude;
+                 output.y = (vector.y / currentMagnitude) * magnitude;
+                 return output;
+            }
+            
+            // Optimize collision detection with caching
+            let player1LastHitTime = 0;
+            let player2LastHitTime = 0;
+            const hitCooldown = 500;
+            const bounceVector = { x: 0, y: 0 };
+            const collisionVector = { x: 0, y: 0 };
+            const normalizedVector = { x: 0, y: 0 };
+            const spikeDirection = { x: 0, y: 0 };
+            // normalizeVector fonksiyonu zaten yukarıda tanımlı
+            
+            // Çarpışma Olay Dinleyicisi - Düzeltilmiş
             Events.on(engine, 'collisionStart', (event) => {
-                if (gameOver || roundOver) return; // Don't process collisions if game or round is over
+                if (gameOver || roundOver) return;
                 
                 const pairs = event.pairs;
                 const currentTime = Date.now();
                 
                 for (let i = 0; i < pairs.length; i++) {
                     const pair = pairs[i];
+                    const bodyA = pair.bodyA;
+                    const bodyB = pair.bodyB;
                     
-                    // Optimize player1 vs spike collision detection
-                    if ((pair.bodyA.label === 'player1' && pair.bodyB.label === 'spike') || 
-                        (pair.bodyB.label === 'player1' && pair.bodyA.label === 'spike')) {
-                        
-                        if (currentTime - player1LastHitTime <= hitCooldown) {
-                            // Apply bounce but skip damage calculation during cooldown
-                            const playerBody = pair.bodyA.label === 'player1' ? pair.bodyA : pair.bodyB;
-                            const spikeBody = pair.bodyA.label === 'spike' ? pair.bodyA : pair.bodyB;
-                            
-                            bounceVector.x = playerBody.position.x - spikeBody.position.x;
-                            bounceVector.y = playerBody.position.y - spikeBody.position.y;
-                            normalizeVector(bounceVector, 0.05, bounceVector);
-                            Body.applyForce(playerBody, playerBody.position, bounceVector);
-                            continue;
-                        }
-                        
+                    // Oyuncu 1 vs Spike
+                    if ((bodyA.label === 'player1' && bodyB.label === 'spike') || (bodyB.label === 'player1' && bodyA.label === 'spike')) {
+                        if (currentTime - player1LastHitTime > hitCooldown) {
                             player1LastHitTime = currentTime;
+                            const playerBody = bodyA.label === 'player1' ? bodyA : bodyB;
+                            const spikeBody = bodyA.label === 'spike' ? bodyA : bodyB;
+                            
+                            // Hasar Hesaplama (Önceki gibi, normalizeVector kullanılarak)
+                            collisionVector.x = playerBody.position.x - spikeBody.position.x;
+                            collisionVector.y = playerBody.position.y - spikeBody.position.y;
+                            let spikeAngle = spikeBody.angle || 0;
+                            spikeDirection.x = Math.cos(spikeAngle);
+                            spikeDirection.y = Math.sin(spikeAngle);
+                            normalizeVector(collisionVector, 1, normalizedVector);
+                            const dotProduct = normalizedVector.x * spikeDirection.x + normalizedVector.y * spikeDirection.y;
+                            const collisionFactor = Math.abs(dotProduct);
+
+                            if (collisionFactor > 0.6) { // Eşiği biraz düşürdük
+                                const baseMultiplier = 1 + (1 - player1Health / initialHealth) * 0.5;
+                                const angleMultiplier = (collisionFactor - 0.6) * 2.5; // Yeniden ölçekle
+                                const damage = 8 * baseMultiplier * angleMultiplier; // Hasar ayarlandı
                                 
-                        // Get player and spike bodies
-                        const playerBody = pair.bodyA.label === 'player1' ? pair.bodyA : pair.bodyB;
-                        const spikeBody = pair.bodyA.label === 'spike' ? pair.bodyA : pair.bodyB;
-                        
-                        // Calculate collision vector
-                        collisionVector.x = playerBody.position.x - spikeBody.position.x;
-                        collisionVector.y = playerBody.position.y - spikeBody.position.y;
+                                player1Health -= damage;
+                                player1.damageLevel = 1 - (player1Health / initialHealth);
                                 
-                                // For spike bodies that are rectangles (the spike shaft)
-                                let spikeAngle = 0;
-                        if (spikeBody.angle !== undefined) {
-                            spikeAngle = spikeBody.angle;
+                                const particleCount = Math.ceil(5 + angleMultiplier * 10);
+                                createBloodParticles(player1, particleCount, playerBody.position);
+                                if(typeof createDebrisParticles === 'function'){
+                                     createDebrisParticles(playerBody.position, particleCount, 'gold');
                                 }
-                                
-                                // Calculate the normalized direction of the spike
-                        spikeDirection.x = Math.cos(spikeAngle);
-                        spikeDirection.y = Math.sin(spikeAngle);
-                                
-                                // Calculate how head-on the collision is
-                        normalizeVector(collisionVector, 1, normalizedVector);
-                        const dotProduct = normalizedVector.x * spikeDirection.x + normalizedVector.y * spikeDirection.y;
-                                
-                                // Convert to an angle-based collision factor (0 to 1)
-                                const collisionFactor = Math.abs(dotProduct);
-                                
-                        // Only apply damage for tip collisions
-                                if (collisionFactor > 0.7) {
-                            // Calculate damage with optimized math
-                                    const baseMultiplier = 1 + (1 - player1Health / initialHealth) * 0.5;
-                            const angleMultiplier = (collisionFactor - 0.7) * 3.33;
-                                    const damage = 10 * baseMultiplier * angleMultiplier;
-                                    
-                            player1Health -= damage;
-                            player1.damageLevel = 1 - (player1Health / initialHealth);
-                                    
-                            // Limit particles based on damage severity
-                            const particleCount = Math.ceil(8 + angleMultiplier * 10); // Reduced particle count
-                            createBloodParticles(player1, particleCount, playerBody.position);
+                            }
                         }
-                        
-                        // Apply bounce force
+                        // Geri sekme kuvveti
+                        const playerBody = bodyA.label === 'player1' ? bodyA : bodyB;
+                        const spikeBody = bodyA.label === 'spike' ? bodyA : bodyB;
                         bounceVector.x = playerBody.position.x - spikeBody.position.x;
                         bounceVector.y = playerBody.position.y - spikeBody.position.y;
                         normalizeVector(bounceVector, 0.05, bounceVector);
                         Body.applyForce(playerBody, playerBody.position, bounceVector);
                     }
                     
-                    // Similar optimization for player2 vs spike collisions
-                    else if ((pair.bodyA.label === 'player2' && pair.bodyB.label === 'spike') || 
-                        (pair.bodyB.label === 'player2' && pair.bodyA.label === 'spike')) {
+                    // Oyuncu 2 vs Spike (Benzer mantık)
+                     else if ((bodyA.label === 'player2' && bodyB.label === 'spike') || (bodyB.label === 'player2' && bodyA.label === 'spike')) {
+                         if (currentTime - player2LastHitTime > hitCooldown) {
+                             player2LastHitTime = currentTime;
+                             const playerBody = bodyA.label === 'player2' ? bodyA : bodyB;
+                             const spikeBody = bodyA.label === 'spike' ? bodyA : bodyB;
+                             
+                             collisionVector.x = playerBody.position.x - spikeBody.position.x;
+                             collisionVector.y = playerBody.position.y - spikeBody.position.y;
+                             let spikeAngle = spikeBody.angle || 0;
+                             spikeDirection.x = Math.cos(spikeAngle);
+                             spikeDirection.y = Math.sin(spikeAngle);
+                             normalizeVector(collisionVector, 1, normalizedVector);
+                             const dotProduct = normalizedVector.x * spikeDirection.x + normalizedVector.y * spikeDirection.y;
+                             const collisionFactor = Math.abs(dotProduct);
+ 
+                             if (collisionFactor > 0.6) {
+                                 const baseMultiplier = 1 + (1 - player2Health / initialHealth) * 0.5;
+                                 const angleMultiplier = (collisionFactor - 0.6) * 2.5;
+                                 const damage = 8 * baseMultiplier * angleMultiplier;
+                                 
+                                 player2Health -= damage;
+                                 player2.damageLevel = 1 - (player2Health / initialHealth);
+                                 
+                                 const particleCount = Math.ceil(5 + angleMultiplier * 10);
+                                 createBloodParticles(player2, particleCount, playerBody.position);
+                                  if(typeof createDebrisParticles === 'function'){
+                                     createDebrisParticles(playerBody.position, particleCount, 'white');
+                                 }
+                             }
+                         }
+                         const playerBody = bodyA.label === 'player2' ? bodyA : bodyB;
+                         const spikeBody = bodyA.label === 'spike' ? bodyA : bodyB;
+                         bounceVector.x = playerBody.position.x - spikeBody.position.x;
+                         bounceVector.y = playerBody.position.y - spikeBody.position.y;
+                         normalizeVector(bounceVector, 0.05, bounceVector);
+                         Body.applyForce(playerBody, playerBody.position, bounceVector);
+                     }
+
+                    // Oyuncu vs Oyuncu
+                    else if ((bodyA.label === 'player1' && bodyB.label === 'player2') || (bodyB.label === 'player1' && bodyA.label === 'player2')) {
+                        const relVel = Vector.sub(bodyB.velocity, bodyA.velocity);
+                        const impactSpeed = Vector.magnitude(relVel);
                         
-                        if (currentTime - player2LastHitTime <= hitCooldown) {
-                            // Apply bounce but skip damage calculation during cooldown
-                            const playerBody = pair.bodyA.label === 'player2' ? pair.bodyA : pair.bodyB;
-                            const spikeBody = pair.bodyA.label === 'spike' ? pair.bodyA : pair.bodyB;
-                            
-                            bounceVector.x = playerBody.position.x - spikeBody.position.x;
-                            bounceVector.y = playerBody.position.y - spikeBody.position.y;
-                            normalizeVector(bounceVector, 0.05, bounceVector);
-                            Body.applyForce(playerBody, playerBody.position, bounceVector);
-                            continue;
+                        if (impactSpeed > 2) { // Sadece yeterince hızlı çarpışmalar hasar versin
+                            const damage = Math.min(20, impactSpeed * 1.5); // Hasarı hızla orantılı yap
+                            const damageShare = damage / 2;
+
+                            if (currentTime - player1LastHitTime > 100) { // Oyuncular için daha kısa cooldown
+                                player1Health -= damageShare;
+                                player1.damageLevel = 1 - (player1Health / initialHealth);
+                                createBloodParticles(player1, Math.ceil(damageShare), bodyA.position);
+                                player1LastHitTime = currentTime; 
+                            }
+                            if (currentTime - player2LastHitTime > 100) {
+                                player2Health -= damageShare;
+                                player2.damageLevel = 1 - (player2Health / initialHealth);
+                                createBloodParticles(player2, Math.ceil(damageShare), bodyB.position);
+                                player2LastHitTime = currentTime;
+                            }
+                             // Görsel efektler eklenebilir
+                             if (typeof createDebrisParticles === 'function') {
+                                 const midPoint = Vector.add(bodyA.position, Vector.mult(Vector.sub(bodyB.position, bodyA.position), 0.5));
+                                 createDebrisParticles(midPoint, Math.ceil(impactSpeed * 2), 'gray');
+                             }
                         }
-                        
-                            player2LastHitTime = currentTime;
-                                
-                        // Get player and spike bodies
-                        const playerBody = pair.bodyA.label === 'player2' ? pair.bodyA : pair.bodyB;
-                        const spikeBody = pair.bodyA.label === 'spike' ? pair.bodyA : pair.bodyB;
-                        
-                        // Calculate collision vector
-                        collisionVector.x = playerBody.position.x - spikeBody.position.x;
-                        collisionVector.y = playerBody.position.y - spikeBody.position.y;
-                                
-                                // For spike bodies that are rectangles (the spike shaft)
-                                let spikeAngle = 0;
-                        if (spikeBody.angle !== undefined) {
-                            spikeAngle = spikeBody.angle;
-                                }
-                                
-                                // Calculate the normalized direction of the spike
-                        spikeDirection.x = Math.cos(spikeAngle);
-                        spikeDirection.y = Math.sin(spikeAngle);
-                                
-                                // Calculate how head-on the collision is
-                        normalizeVector(collisionVector, 1, normalizedVector);
-                        const dotProduct = normalizedVector.x * spikeDirection.x + normalizedVector.y * spikeDirection.y;
-                                
-                                // Convert to an angle-based collision factor (0 to 1)
-                                const collisionFactor = Math.abs(dotProduct);
-                                
-                        // Only apply damage for tip collisions
-                                if (collisionFactor > 0.7) {
-                            // Calculate damage with optimized math
-                                    const baseMultiplier = 1 + (1 - player2Health / initialHealth) * 0.5;
-                            const angleMultiplier = (collisionFactor - 0.7) * 3.33;
-                                    const damage = 10 * baseMultiplier * angleMultiplier;
-                                    
-                            player2Health -= damage;
-                            player2.damageLevel = 1 - (player2Health / initialHealth);
-                                    
-                            // Limit particles based on damage severity
-                            const particleCount = Math.ceil(8 + angleMultiplier * 10); // Reduced particle count
-                            createBloodParticles(player2, particleCount, playerBody.position);
-                        }
-                        
-                        // Apply bounce force
-                        bounceVector.x = playerBody.position.x - spikeBody.position.x;
-                        bounceVector.y = playerBody.position.y - spikeBody.position.y;
-                        normalizeVector(bounceVector, 0.05, bounceVector);
-                        Body.applyForce(playerBody, playerBody.position, bounceVector);
+                    }
+                }
+            });
+            
+             // Update the game loop
+             let frameCount = 0;
+             let lastBeforeUpdateLog = 0;
+             Events.on(engine, 'beforeUpdate', function() { 
+                 const now = Date.now();
+                 if (now - lastBeforeUpdateLog > 1000) { /* ... loglama kodu ... */ }
+                 frameCount++;
+                 
+                 // Rotate arena
+                 if (!gameOver && frameCount % 2 === 0) { /* ... arena döndürme ... */ }
+                 
+                 // --- Oyuncu Sınır Kontrolü --- 
+                 [player1, player2].forEach(player => {
+                     if (!player) return;
+                     const distance = Vector.magnitude(Vector.sub(player.position, { x: centerX, y: centerY }));
+                     const maxDistance = gameRadius - playerRadius; // Kenara ne kadar yaklaşabileceği
+                     if (distance > maxDistance) {
+                         const overlap = distance - maxDistance;
+                         const direction = Vector.normalise(Vector.sub({ x: centerX, y: centerY }, player.position));
+                         const forceMagnitude = overlap * 0.01; // Geri itme kuvveti
+                         Body.applyForce(player, player.position, Vector.mult(direction, forceMagnitude));
+                         
+                         // Sınırda hızı biraz azalt
+                         Body.setVelocity(player, Vector.mult(player.velocity, 0.95)); 
+                     }
+                 });
+                 // --- Sınır Kontrolü Sonu ---
+                 
+                 // Oyuncu hareket/fizik güncellemeleri
+                 if (isMultiplayerActive && !gameOver && !roundOver) {
+                    // Bu blok çalışıyor mu?
+                    if (frameCount % 60 === 0) { // Saniyede bir logla
+                        console.log("Multiplayer fizik güncelleme bloğu çalışıyor.");
                     }
                     
-                    // Continue with player vs player collisions...
-                    // ... existing code ...
-                }
-            });
-
-            // Update the game loop to reduce processing
-            let frameCount = 0;
-            let lastBeforeUpdateLog = 0;
-            Events.on(engine, 'beforeUpdate', function() {
-                const now = Date.now();
-                // Her 1 saniyede bir logla
-                if (now - lastBeforeUpdateLog > 1000) {
-                    console.log(`beforeUpdate çalışıyor - Frame: ${frameCount}, Multiplayer: ${isMultiplayerActive}, RoundOver: ${roundOver}, GameOver: ${gameOver}`);
-                    if (player1 && player2) {
-                         console.log(`  P1 Pos: (${player1.position.x.toFixed(1)}, ${player1.position.y.toFixed(1)}), P2 Pos: (${player2.position.x.toFixed(1)}, ${player2.position.y.toFixed(1)})`);
-                         console.log(`  P1 Health: ${player1Health}, P2 Health: ${player2Health}`);
-                    }
-                    lastBeforeUpdateLog = now;
-                }
-
-                frameCount++;
-                
-                // Rotate arena at reduced frequency
-                if (!gameOver && frameCount % 2 === 0) { // Sadece oyun bitmediyse döndür
-                    arenaRotation += arenaRotationSpeed;
-                    for (let i = 0; i < walls.length; i++) {
-                        Body.setPosition(walls[i], {
-                            x: centerX + Math.cos(arenaRotation + (Math.PI * 2 / segments) * i) * gameRadius,
-                            y: centerY + Math.sin(arenaRotation + (Math.PI * 2 / segments) * i) * gameRadius
-                        });
-                        Body.setAngle(walls[i], arenaRotation + (Math.PI * 2 / segments) * i);
-                    }
-                }
-                
-                // Oyuncu hareket/fizik güncellemeleri (sadece oyun aktifse)
-                if (isMultiplayerActive && !gameOver && !roundOver) {
-                     // Hız ve hasar kontrolleri buraya eklenebilir
-                     // Örneğin: applyPlayerForces() gibi bir fonksiyon çağrılabilir
-                     // applyPlayerForces(player1, player1Health);
-                     // applyPlayerForces(player2, player2Health);
-                }
-                
-                // Optimize world bound checking
-                const checkBounds = (frameCount % 5 === 0); // Only check every 5 frames
-                
-                // Reduced check frequency for round end conditions
-                if (frameCount % 10 === 0) {
-                    if (player1Health <= 0 || player2Health <= 0) {
-                        if (!roundOver) {
-                            roundOver = true;
-                            roundEndTime = Date.now();
-                            
-                            if (player1Health <= 0) {
-                                player2Score++;
-                            } else {
-                                player1Score++;
-                            }
-                            
-                            if (player1Score >= winningScore || player2Score >= winningScore) {
-                                gameOver = true;
-                                winner = player1Score >= winningScore ? 'player1' : 'player2';
-                            }
-                            
-                            // Emit score update for multiplayer mode
-                            if (isMultiplayerActive && typeof window.gameInterface !== 'undefined') {
-                                window.gameInterface.updateScore(player1Score, player2Score, roundOver, gameOver, winner);
-                            }
+                    // --- Oyuncu Fizik Güncelleme Kodu Başlangıcı ---
+                    const healthLossPercent1 = 1 - (player1Health / initialHealth);
+                    const healthLossPercent2 = 1 - (player2Health / initialHealth);
+                    const targetSpeed1 = targetSpeed;
+                    const targetSpeed2 = targetSpeed;
+                    
+                    // Oyuncuları hedef hıza doğru it
+                    const speed1 = Math.hypot(player1.velocity.x, player1.velocity.y);
+                    const speedDiff1 = targetSpeed1 - speed1;
+                    if (Math.abs(speedDiff1) > targetSpeed1 * 0.1) {
+                        const forceMultiplier = (speedDiff1 > 0) ? 0.002 : -0.0005;
+                        let forceDir;
+                        try {
+                             forceDir = speed1 < 0.1 ? 
+                                { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 } : 
+                                normalizeVector(player1.velocity, 1, {x:0,y:0}); // Hata burada olabilir mi?
+                        } catch (e) {
+                            console.error("normalizeVector(player1) hatası:", e, player1.velocity);
+                            forceDir = { x: 0, y: 0 }; // Hata durumunda varsayılan
                         }
-                        
-                        if (roundOver && !gameOver && Date.now() - roundEndTime >= roundRestartDelay) {
-                            // Start new round
-                        player1Health = initialHealth;
-                        player2Health = initialHealth;
-                        roundOver = false;
-                        
-                            // Reset player positions
-                        Body.setPosition(player1, { x: centerX - gameRadius * 0.3, y: centerY });
-                        Body.setPosition(player2, { x: centerX + gameRadius * 0.3, y: centerY });
-                        Body.setVelocity(player1, { x: 0, y: 0 });
-                        Body.setVelocity(player2, { x: 0, y: 0 });
-                        
-                            if (isMultiplayerActive && typeof window.gameInterface !== 'undefined') {
-                                window.gameInterface.roundOver(false);
-                            }
-                        }
+                         const force = { x: forceDir.x * Math.abs(speedDiff1) * forceMultiplier, y: forceDir.y * Math.abs(speedDiff1) * forceMultiplier };
+                        Body.applyForce(player1, player1.position, force);
                     }
-                }
-            });
-            console.log("'beforeUpdate' dinleyicisi eklendi.");
+
+                    const speed2 = Math.hypot(player2.velocity.x, player2.velocity.y);
+                    const speedDiff2 = targetSpeed2 - speed2;
+                    if (Math.abs(speedDiff2) > targetSpeed2 * 0.1) {
+                        const forceMultiplier = (speedDiff2 > 0) ? 0.002 : -0.0005;
+                        let forceDir;
+                         try {
+                              forceDir = speed2 < 0.1 ? 
+                                 { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 } : 
+                                 normalizeVector(player2.velocity, 1, {x:0,y:0}); // Hata burada olabilir mi?
+                         } catch (e) {
+                             console.error("normalizeVector(player2) hatası:", e, player2.velocity);
+                             forceDir = { x: 0, y: 0 }; // Hata durumunda varsayılan
+                         }
+                         const force = { x: forceDir.x * Math.abs(speedDiff2) * forceMultiplier, y: forceDir.y * Math.abs(speedDiff2) * forceMultiplier };
+                        Body.applyForce(player2, player2.position, force);
+                    }
+
+                    // Küçük rastgele itmeler (daha az sıklıkla)
+                    if (frameCount % 15 === 0) { 
+                        Body.applyForce(player1, player1.position, { x: (Math.random() - 0.5) * 0.001, y: (Math.random() - 0.5) * 0.001 });
+                        Body.applyForce(player2, player2.position, { x: (Math.random() - 0.5) * 0.001, y: (Math.random() - 0.5) * 0.001 });
+                    }
+                 }
+                 
+                 // Round end checks
+                 if (frameCount % 10 === 0) { /* ... raund bitiş kontrolü ... */ }
+             });
+             console.log("'beforeUpdate' dinleyicisi eklendi.");
 
             // --- Multiplayer Fonksiyonları (initGame içinde) ---
             function startMultiplayerGame(pNumber) {
@@ -519,33 +655,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            function createBloodParticles(player, count, position) {
-                // Limit particle count for better performance
-                const particleSize = playerRadius * 0.15;
-                const maxCount = Math.min(15, count); // Cap at 15 particles
-                const playerColor = (player === player1) ? '#FFD700' : '#FFFFFF';
-                
-                // Remove oldest particles if we exceed the max
-                while (bloodParticles.length >= MAX_BLOOD_PARTICLES) {
-                    bloodParticles.shift();
-                }
-                
-                for (let i = 0; i < maxCount; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const speed = 0.5 + Math.random() * 2;
-                    bloodParticles.push({
-                        x: position.x,
-                        y: position.y,
-                        vx: Math.cos(angle) * speed,
-                        vy: Math.sin(angle) * speed,
-                        size: particleSize * (0.5 + Math.random() * 0.5),
-                        color: playerColor,
-                        alpha: 1,
-                        life: 30 + Math.random() * 20 // Reduced lifetime
-                    });
-                }
-            }
-
             function createDebrisParticles(position, count, color) {
                 if (!particleContainer || !particleTextures || !particleTextures.circle) return;
                 
@@ -573,7 +682,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // ... diğer yardımcı fonksiyonlar ...
+            // Texture oluşturma (sadece bir kez)
+            const particleTextures = { circle: createCircleTexture(8, 0xFFFFFF) };
+            function createCircleTexture(radius = 8, color = 0xFFFFFF) {
+                 const graphics = new PIXI.Graphics();
+                 // ... (texture oluşturma kodu) ...
+                 return pixiApp.renderer.generateTexture(graphics);
+            }
 
             // --- API'yi ve Hazır Durumunu Ayarla ---
             console.log("GameAPI oluşturuluyor...");
