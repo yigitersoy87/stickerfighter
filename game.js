@@ -4,6 +4,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let playerNumber = 0;  // Oyuncu numarası
     let lastPositionUpdateTime = 0; // Son pozisyon güncelleme zamanı
     
+    // Global değişkenler - initGame dışında da erişilebilir
+    let player1, player2, centerX, centerY, gameRadius;
+    let player1Health, player2Health;
+    let initialHealth = 100;
+    let player1Score = 0, player2Score = 0;
+    let roundOver = false, gameOver = false;
+    let winner = null;
+    
     // Oyunu sadece bir kez başlat
     setTimeout(() => {
         if (!gameInitialized) {
@@ -107,27 +115,27 @@ document.addEventListener('DOMContentLoaded', () => {
             delta: 1000/30 // 30 FPS physics (instead of 60)
         });
         
-        const gameRadius = Math.min(canvas.width, canvas.height) * 0.45;
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
+        gameRadius = Math.min(canvas.width, canvas.height) * 0.45;
+        centerX = canvas.width / 2;
+        centerY = canvas.height / 2;
         const wallThickness = 20;
         const playerRadius = gameRadius * 0.08;
         const targetSpeed = 7;
         const arenaRotationSpeed = 0.001; // Reduced rotation speed for better performance
 
-        const initialHealth = 100;
-        let player1Health = initialHealth;
-        let player2Health = initialHealth;
+        initialHealth = 100;
+        player1Health = initialHealth;
+        player2Health = initialHealth;
             
-            // Score and game state variables
-            let player1Score = 0;
-            let player2Score = 0;
-            const winningScore = 3;
-            let gameOver = false;
-            let winner = null;
-            let roundOver = false;
-            let roundEndTime = 0;
-            const roundRestartDelay = 2000; // 2 seconds before starting a new round
+        // Score and game state variables
+        player1Score = 0;
+        player2Score = 0;
+        const winningScore = 3;
+        gameOver = false;
+        winner = null;
+        roundOver = false;
+        let roundEndTime = 0;
+        const roundRestartDelay = 2000; // 2 seconds before starting a new round
         
         // Reduce initial capacity for particles
         const bloodParticles = [];
@@ -145,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const spikeWidth = 6;
         
         // Oyuncuları ekle - eksik olan bu kısımdı
-        const player1 = Bodies.circle(centerX - gameRadius * 0.3, centerY, playerRadius, {
+        player1 = Bodies.circle(centerX - gameRadius * 0.3, centerY, playerRadius, {
             restitution: 1,
             friction: 0,
             frictionAir: 0.0005,
@@ -154,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
             damageLevel: 0
         });
 
-        const player2 = Bodies.circle(centerX + gameRadius * 0.3, centerY, playerRadius, {
+        player2 = Bodies.circle(centerX + gameRadius * 0.3, centerY, playerRadius, {
             restitution: 1,
             friction: 0,
             frictionAir: 0.0005,
@@ -719,7 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Multiplayer fonksiyonlarını global kapsamda düzgün tanımla
+    // Multiplayer fonksiyonlarını tanımla ve global olarak dışa aktar
     window.startMultiplayerGame = function(pNumber) {
         console.log("Multiplayer oyunu başlatılıyor, oyuncu numarası:", pNumber);
         isMultiplayerActive = true;
@@ -772,7 +780,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.damage > 1 && data.position) {
             createBloodParticles(playerObj, Math.min(10, Math.ceil(data.damage)), data.position);
             
-            // Parçacık efektlerini ekle
+            // Parçacık efektlerini ekle - debugParticles varsa çağır
             if (typeof createDebrisParticles === 'function') {
                 const color = data.player === 'player1' ? 'gold' : 'white';
                 createDebrisParticles(data.position, Math.min(15, Math.ceil(data.damage)), color);
