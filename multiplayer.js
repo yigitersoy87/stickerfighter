@@ -401,95 +401,80 @@ function updateScore(player1Score, player2Score, roundOver, gameOver, winner) {
 
 // Oyunu gerçekten başlat (geri sayım sonrası)
 function actuallyStartGame() {
+    // Oyun motorunun hazır olup olmadığını kontrol et
+    if (!window.isGameEngineReady || !window.GameAPI) {
+        console.log("Oyun motoru henüz hazır değil, 100ms sonra tekrar denenecek.");
+        setTimeout(actuallyStartGame, 100); // 100ms sonra tekrar dene
+        return;
+    }
+
+    console.log("Oyun motoru hazır, oyun başlatılıyor...");
     isGameStarted = true;
-    
+
     // Kullanıcı adlarını oyuncuların üzerinde göstermek için hazırlık
     gameUI.innerHTML = '';
-    
-    // Oyun arayüzünü hazırla
+
+    // Oyun arayüzünü hazırla (API fonksiyonlarını kullanarak)
     window.gameInterface = {
         playerNumber,
         socket,
         username,
         otherPlayerUsername,
+        // Doğrudan multiplayer.js içindeki fonksiyonları kullan
         updatePosition,
         updateHealth,
         reportCollision,
         updateScore,
-        roundOver,
+        roundOver, // Bu fonksiyonu da tanımladık
         gameOver,
         addPlayerLabels,
-        playerHealth: 100, // Başlangıç sağlık değeri
-        timeSeed: window.gameSyncSeed || Math.floor(Date.now() / 1000), // Senkronize hareket için seed
-        lastServerState: lastServerState, // Son sunucu durumu
-        networkLatency, // Ağ gecikmesi bilgisini ekle
-        
-        // Sunucudan gelen durumla senkronize et
+        playerHealth: 100,
+        timeSeed: window.gameSyncSeed || Math.floor(Date.now() / 1000),
+        lastServerState: lastServerState,
+        networkLatency,
+
+        // Sunucudan gelen durumla senkronize et (GameAPI üzerinden)
         updateFromServer: function(serverState) {
-            // Optimizasyon: Sadece önemli değişiklikleri uygula
-            if (!serverState) return;
-            
-            // Son durum zamanını kaydet
-            lastUpdateTime = Date.now();
-            
-            // Pozisyon ön belleğine kaydet
-            if (serverState.player1) {
-                positionBuffer.player1 = serverState.player1;
-            }
-            
-            if (serverState.player2) {
-                positionBuffer.player2 = serverState.player2;
-            }
-            
-            console.log("Server durumu alındı", 
-                serverState.player1 ? `P1:(${Math.round(serverState.player1.x)},${Math.round(serverState.player1.y)})` : "",
-                serverState.player2 ? `P2:(${Math.round(serverState.player2.x)},${Math.round(serverState.player2.y)})` : "");
-            
-            // updateGameFromServer fonksiyonunu çağır
-            if (window.updateGameFromServer) {
-                window.updateGameFromServer(serverState);
+            if (window.GameAPI && typeof window.GameAPI.update === 'function') {
+                window.GameAPI.update(serverState);
             } else {
-                console.error("window.updateGameFromServer fonksiyonu bulunamadı!");
+                console.error("window.GameAPI.update fonksiyonu bulunamadı!");
             }
         },
-        
-        // Çarpışma efektlerini göster - optimize edilmiş
+
+        // Çarpışma efektlerini göster (GameAPI üzerinden)
         showCollisionEffect: function(collisionData) {
-            // Gereksiz çarpışmaları filtrele
-            if (!collisionData || collisionData.damage < 2) return;
-            
-            // Çarpışma efektlerini göster
-            if (typeof showCollisionEffects === 'function') {
-                showCollisionEffects(collisionData);
+            if (window.GameAPI && typeof window.GameAPI.effects === 'function') {
+                window.GameAPI.effects(collisionData);
+            } else {
+                 console.error("window.GameAPI.effects fonksiyonu bulunamadı!");
             }
         }
     };
-    
-    console.log("Son server durumu:", lastServerState);
-    
-    // Doğrudan window.startMultiplayerGame yerine bir alternatif çözüm
-    if (typeof window.startMultiplayerGame === 'function') {
-        console.log("Oyun başlatılıyor, oyuncu numarası:", playerNumber);
-        window.startMultiplayerGame(playerNumber);
+
+    console.log("Son server durumu (başlangıçta):", lastServerState);
+
+    // Oyunu başlat (GameAPI üzerinden)
+    if (window.GameAPI && typeof window.GameAPI.start === 'function') {
+        window.GameAPI.start(playerNumber);
+         console.log("window.GameAPI.start başarıyla çağrıldı.");
     } else {
-        console.log("startMultiplayerGame fonksiyonu bulunamadı, alternatif başlatma kullanılıyor");
-        
-        // window.startMultiplayerGame fonksiyonu olmadan oyunu başlatma
-        isMultiplayerActive = true;
-        console.log("Multiplayer oyunu başlatılıyor, oyuncu numarası:", playerNumber);
+         console.error("window.GameAPI.start fonksiyonu başlatılamadı!");
+         showGameMessage("Oyun başlatılamadı! Lütfen tekrar deneyin.", true);
+         return; // Başlatma başarısız olduysa devam etme
     }
-    
+
     // Eğer son server durumu varsa, hemen güncelle
     if (lastServerState) {
         console.log("Başlangıç durumu uygulanıyor:", lastServerState);
-        if (window.updateGameFromServer) {
-            window.updateGameFromServer(lastServerState);
+        if (window.GameAPI && typeof window.GameAPI.update === 'function') {
+            window.GameAPI.update(lastServerState);
             console.log("Başlangıç durumu uygulandı!");
         } else {
-            console.error("updateGameFromServer fonksiyonu bulunamadı, durumlar güncellenemez!");
+             console.error("updateGameFromServer fonksiyonu bulunamadı, durumlar güncellenemez!");
         }
     }
-    
+
     // Oyuncu isimlerini skor tablosuna ekle
     setTimeout(() => {
         updateScorePlayerNames();
@@ -674,11 +659,9 @@ function updateScore(data) {
 
 // Raund bittiğinde
 function roundOver(isOver) {
-    if (!currentRoom || !isGameStarted) return;
-    
-    if (!isOver) {
-        socket.emit('startNewRound');
-    }
+    console.log("Multiplayer: Raund bitti durumu:", isOver);
+    // Gerekirse sunucuya bildirim gönderilebilir veya UI güncellenebilir
+    // Not: Server zaten scoreUpdate içinde roundOver bilgisini gönderiyor.
 }
 
 // Oyun bittiğinde
