@@ -237,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("Nesneler dünyaya eklendi.");
 
             // Olay dinleyicileri
-            console.log("Olay dinleyicileri ayarlanıyor...");
+            console.log("Olay dinleyicileri ayarlandı.");
             Events.on(render, 'afterRender', () => {
                 if (!player1 || !player2) return; // Nesnelerin var olduğundan emin ol
                 arenaBoundary.draw();
@@ -390,12 +390,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Update the game loop to reduce processing
             let frameCount = 0;
+            let lastBeforeUpdateLog = 0;
             Events.on(engine, 'beforeUpdate', function() {
+                const now = Date.now();
+                // Her 1 saniyede bir logla
+                if (now - lastBeforeUpdateLog > 1000) {
+                    console.log(`beforeUpdate çalışıyor - Frame: ${frameCount}, Multiplayer: ${isMultiplayerActive}, RoundOver: ${roundOver}, GameOver: ${gameOver}`);
+                    if (player1 && player2) {
+                         console.log(`  P1 Pos: (${player1.position.x.toFixed(1)}, ${player1.position.y.toFixed(1)}), P2 Pos: (${player2.position.x.toFixed(1)}, ${player2.position.y.toFixed(1)})`);
+                         console.log(`  P1 Health: ${player1Health}, P2 Health: ${player2Health}`);
+                    }
+                    lastBeforeUpdateLog = now;
+                }
+
                 frameCount++;
                 
                 // Rotate arena at reduced frequency
-                if (frameCount % 2 === 0) { // Only rotate every other frame
-                arenaRotation += arenaRotationSpeed;
+                if (!gameOver && frameCount % 2 === 0) { // Sadece oyun bitmediyse döndür
+                    arenaRotation += arenaRotationSpeed;
                     for (let i = 0; i < walls.length; i++) {
                         Body.setPosition(walls[i], {
                             x: centerX + Math.cos(arenaRotation + (Math.PI * 2 / segments) * i) * gameRadius,
@@ -403,6 +415,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         Body.setAngle(walls[i], arenaRotation + (Math.PI * 2 / segments) * i);
                     }
+                }
+                
+                // Oyuncu hareket/fizik güncellemeleri (sadece oyun aktifse)
+                if (isMultiplayerActive && !gameOver && !roundOver) {
+                     // Hız ve hasar kontrolleri buraya eklenebilir
+                     // Örneğin: applyPlayerForces() gibi bir fonksiyon çağrılabilir
+                     // applyPlayerForces(player1, player1Health);
+                     // applyPlayerForces(player2, player2Health);
                 }
                 
                 // Optimize world bound checking
@@ -450,16 +470,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 }
-
-                // ... existing code ...
-                
             });
-            
-            // ... rest of existing code ...
+            console.log("'beforeUpdate' dinleyicisi eklendi.");
 
             // --- Multiplayer Fonksiyonları (initGame içinde) ---
             function startMultiplayerGame(pNumber) {
-                console.log("Multiplayer oyunu başlatılıyor (game.js), oyuncu numarası:", pNumber);
+                console.log(`startMultiplayerGame çağrıldı - Oyuncu No: ${pNumber}`); // Log eklendi
                 isMultiplayerActive = true;
                 playerNumber = pNumber;
                 if (!Body || !player1 || !player2) {
