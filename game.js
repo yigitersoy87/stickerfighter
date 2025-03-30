@@ -718,4 +718,112 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Oyun başlatılırken bir hata oluştu. Lütfen sayfayı yenileyin ve tekrar deneyin.");
         }
     }
+
+    // Multiplayer fonksiyonlarını global kapsamda düzgün tanımla
+    window.startMultiplayerGame = function(pNumber) {
+        console.log("Multiplayer oyunu başlatılıyor, oyuncu numarası:", pNumber);
+        isMultiplayerActive = true;
+        playerNumber = pNumber;
+        
+        // Oyuncuların başlangıç pozisyonlarını ayarla
+        Body.setPosition(player1, { x: centerX - gameRadius * 0.3, y: centerY });
+        Body.setPosition(player2, { x: centerX + gameRadius * 0.3, y: centerY });
+        Body.setVelocity(player1, { x: 0, y: 0 });
+        Body.setVelocity(player2, { x: 0, y: 0 });
+        
+        // Oyunu başlat
+        player1Health = initialHealth;
+        player2Health = initialHealth;
+        player1Score = 0;
+        player2Score = 0;
+        roundOver = false;
+        gameOver = false;
+    };
+
+    window.updateGameFromServer = function(serverState) {
+        if (!isMultiplayerActive) return;
+        console.log("Sunucudan gelen durum uygulanıyor");
+        
+        // Pozisyonları güncelle
+        if (serverState.player1) {
+            Body.setPosition(player1, serverState.player1);
+        }
+        
+        if (serverState.player2) {
+            Body.setPosition(player2, serverState.player2);
+        }
+        
+        // Sağlık ve skor değerlerini güncelle
+        player1Health = serverState.player1Health || initialHealth;
+        player2Health = serverState.player2Health || initialHealth;
+        player1Score = serverState.player1Score || 0;
+        player2Score = serverState.player2Score || 0;
+        roundOver = serverState.roundOver || false;
+        gameOver = serverState.gameOver || false;
+    };
+
+    window.showCollisionEffects = function(data) {
+        if (!isMultiplayerActive) return;
+        
+        // Hangi oyuncunun çarpıştığını belirle
+        const playerObj = data.player === 'player1' ? player1 : player2;
+        
+        // Çarpışma efektlerini göster
+        if (data.damage > 1 && data.position) {
+            createBloodParticles(playerObj, Math.min(10, Math.ceil(data.damage)), data.position);
+            
+            // Parçacık efektlerini ekle
+            if (typeof createDebrisParticles === 'function') {
+                const color = data.player === 'player1' ? 'gold' : 'white';
+                createDebrisParticles(data.position, Math.min(15, Math.ceil(data.damage)), color);
+            }
+        }
+    };
+
+    // Özel parçacık efekti fonksiyonu
+    function createDebrisParticles(position, count, color) {
+        if (!particleContainer || !particleTextures || !particleTextures.circle) return;
+        
+        const particleColor = color === 'gold' ? 0xFFD700 : color === 'white' ? 0xFFFFFF : 0xA9A9A9;
+        const maxCount = Math.min(count, 10); // Parçacık sayısını sınırla
+        
+        for (let i = 0; i < maxCount; i++) {
+            const particle = new PIXI.Sprite(particleTextures.circle);
+            particle.anchor.set(0.5);
+            particle.position.set(position.x, position.y);
+            const scale = 0.05 + Math.random() * 0.1;
+            particle.scale.set(scale);
+            particle.tint = particleColor;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.5 + Math.random() * 2;
+            particle.velocity = { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed };
+            particle.spin = -0.05 + Math.random() * 0.1;
+            particle.gravity = 0.05 + Math.random() * 0.05;
+            particle.friction = 0.98;
+            particle.life = 20 + Math.random() * 10;
+            particle.alpha = 0.8;
+            particle.maxLife = particle.life;
+            particleContainer.addChild(particle);
+            particles.push(particle);
+        }
+    }
+
+    // ParticleContainer'ı güncelle
+    pixiApp.ticker.add(() => {
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const particle = particles[i];
+            particle.velocity.x *= particle.friction;
+            particle.velocity.y *= particle.friction;
+            particle.velocity.y += particle.gravity;
+            particle.position.x += particle.velocity.x;
+            particle.position.y += particle.velocity.y;
+            particle.rotation += particle.spin;
+            particle.life--;
+            particle.alpha = (particle.life / particle.maxLife) * particle.alpha;
+            if (particle.life <= 0) {
+                particleContainer.removeChild(particle);
+                particles.splice(i, 1);
+            }
+        }
+    });
 });
