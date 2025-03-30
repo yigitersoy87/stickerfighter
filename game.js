@@ -119,15 +119,15 @@ document.addEventListener('DOMContentLoaded', () => {
         let player1Health = initialHealth;
         let player2Health = initialHealth;
             
-        // Score and game state variables
-        let player1Score = 0;
-        let player2Score = 0;
-        const winningScore = 3;
-        let gameOver = false;
-        let winner = null;
-        let roundOver = false;
-        let roundEndTime = 0;
-        const roundRestartDelay = 2000; // 2 seconds before starting a new round
+            // Score and game state variables
+            let player1Score = 0;
+            let player2Score = 0;
+            const winningScore = 3;
+            let gameOver = false;
+            let winner = null;
+            let roundOver = false;
+            let roundEndTime = 0;
+            const roundRestartDelay = 2000; // 2 seconds before starting a new round
         
         // Reduce initial capacity for particles
         const bloodParticles = [];
@@ -144,6 +144,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const spikeLength = gameRadius * 0.2;
         const spikeWidth = 6;
         
+        // Oyuncuları ekle - eksik olan bu kısımdı
+        const player1 = Bodies.circle(centerX - gameRadius * 0.3, centerY, playerRadius, {
+            restitution: 1,
+            friction: 0,
+            frictionAir: 0.0005,
+            render: { fillStyle: '#FFD700' },
+            label: 'player1',
+            damageLevel: 0
+        });
+
+        const player2 = Bodies.circle(centerX + gameRadius * 0.3, centerY, playerRadius, {
+            restitution: 1,
+            friction: 0,
+            frictionAir: 0.0005,
+            render: { fillStyle: '#FFFFFF' },
+            label: 'player2',
+            damageLevel: 0
+        });
+
         for (let i = 0; i < segments; i++) {
             const angle = (Math.PI * 2 / segments) * i;
             const nextAngle = (Math.PI * 2 / segments) * (i + 1);
@@ -318,11 +337,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 particle.life--;
                 
                 if (particle.alpha > 0.1) { // Only draw visible particles
-                    ctx.globalAlpha = Math.max(0, particle.alpha);
-                    ctx.fillStyle = particle.color;
-                    ctx.beginPath();
-                    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-                    ctx.fill();
+                ctx.globalAlpha = Math.max(0, particle.alpha);
+                ctx.fillStyle = particle.color;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
                 }
                 
                 if (particle.life <= 0) bloodParticles.splice(i, 1);
@@ -353,6 +372,16 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Call once after spikes are created
         setTimeout(setupSpikeCache, 100);
+
+        // Tüm nesneleri dünyaya ekle
+        Composite.add(engine.world, [arenaContainer, player1, player2]);
+
+        // Events.on afterRender'ı ekle
+        Events.on(render, 'afterRender', () => {
+            arenaBoundary.draw();
+            drawPlayerDamage(render.context, player1, player1Health / initialHealth);
+            drawPlayerDamage(render.context, player2, player2Health / initialHealth);
+        });
         
         function addNailEffects(ctx) {
             // Use cached spike data instead of accessing physics objects
@@ -360,25 +389,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const spike = spikeCache[i];
                 const pos = spike.pos;
                 
-                if (spike.circleRadius) {
-                    ctx.beginPath();
-                    ctx.arc(pos.x, pos.y, spike.circleRadius * 0.6, 0, Math.PI * 2);
-                    const gradient = ctx.createRadialGradient(pos.x - spike.circleRadius * 0.3, pos.y - spike.circleRadius * 0.3, 0, pos.x, pos.y, spike.circleRadius);
-                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-                    gradient.addColorStop(0.3, 'rgba(220, 220, 220, 0.4)');
-                    gradient.addColorStop(1, 'rgba(180, 180, 180, 0)');
-                    ctx.fillStyle = gradient;
-                    ctx.fill();
+                    if (spike.circleRadius) {
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, spike.circleRadius * 0.6, 0, Math.PI * 2);
+                        const gradient = ctx.createRadialGradient(pos.x - spike.circleRadius * 0.3, pos.y - spike.circleRadius * 0.3, 0, pos.x, pos.y, spike.circleRadius);
+                        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+                        gradient.addColorStop(0.3, 'rgba(220, 220, 220, 0.4)');
+                        gradient.addColorStop(1, 'rgba(180, 180, 180, 0)');
+                        ctx.fillStyle = gradient;
+                        ctx.fill();
                 } else if (spike.vertices) {
                     const vertices = spike.vertices;
-                    ctx.beginPath();
-                    ctx.moveTo(vertices[0].x, vertices[0].y);
-                    ctx.lineTo(vertices[1].x, vertices[1].y);
-                    ctx.lineTo(vertices[2].x, vertices[2].y);
-                    ctx.lineTo(vertices[3].x, vertices[3].y);
-                    ctx.closePath();
+                        ctx.beginPath();
+                        ctx.moveTo(vertices[0].x, vertices[0].y);
+                        ctx.lineTo(vertices[1].x, vertices[1].y);
+                        ctx.lineTo(vertices[2].x, vertices[2].y);
+                        ctx.lineTo(vertices[3].x, vertices[3].y);
+                        ctx.closePath();
                     ctx.fillStyle = 'rgba(190, 190, 190, 0.2)';
-                    ctx.fill();
+                        ctx.fill();
                 }
             }
         }
@@ -472,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         Events.on(engine, 'collisionStart', (event) => {
-            if (gameOver || roundOver) return; // Don't process collisions if game or round is over
+                if (gameOver || roundOver) return; // Don't process collisions if game or round is over
                 
             const pairs = event.pairs;
             const currentTime = Date.now();
@@ -496,8 +525,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         continue;
                     }
                     
-                    player1LastHitTime = currentTime;
-                    
+                        player1LastHitTime = currentTime;
+                            
                     // Get player and spike bodies
                     const playerBody = pair.bodyA.label === 'player1' ? pair.bodyA : pair.bodyB;
                     const spikeBody = pair.bodyA.label === 'spike' ? pair.bodyA : pair.bodyB;
@@ -505,34 +534,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Calculate collision vector
                     collisionVector.x = playerBody.position.x - spikeBody.position.x;
                     collisionVector.y = playerBody.position.y - spikeBody.position.y;
-                    
-                    // For spike bodies that are rectangles (the spike shaft)
-                    let spikeAngle = 0;
+                            
+                            // For spike bodies that are rectangles (the spike shaft)
+                            let spikeAngle = 0;
                     if (spikeBody.angle !== undefined) {
                         spikeAngle = spikeBody.angle;
-                    }
-                    
-                    // Calculate the normalized direction of the spike
+                            }
+                            
+                            // Calculate the normalized direction of the spike
                     spikeDirection.x = Math.cos(spikeAngle);
                     spikeDirection.y = Math.sin(spikeAngle);
-                    
-                    // Calculate how head-on the collision is
+                            
+                            // Calculate how head-on the collision is
                     normalizeVector(collisionVector, 1, normalizedVector);
                     const dotProduct = normalizedVector.x * spikeDirection.x + normalizedVector.y * spikeDirection.y;
-                    
-                    // Convert to an angle-based collision factor (0 to 1)
-                    const collisionFactor = Math.abs(dotProduct);
-                    
+                            
+                            // Convert to an angle-based collision factor (0 to 1)
+                            const collisionFactor = Math.abs(dotProduct);
+                            
                     // Only apply damage for tip collisions
-                    if (collisionFactor > 0.7) {
+                            if (collisionFactor > 0.7) {
                         // Calculate damage with optimized math
-                        const baseMultiplier = 1 + (1 - player1Health / initialHealth) * 0.5;
+                                const baseMultiplier = 1 + (1 - player1Health / initialHealth) * 0.5;
                         const angleMultiplier = (collisionFactor - 0.7) * 3.33;
-                        const damage = 10 * baseMultiplier * angleMultiplier;
-                        
+                                const damage = 10 * baseMultiplier * angleMultiplier;
+                                
                         player1Health -= damage;
                         player1.damageLevel = 1 - (player1Health / initialHealth);
-                        
+                                
                         // Limit particles based on damage severity
                         const particleCount = Math.ceil(8 + angleMultiplier * 10); // Reduced particle count
                         createBloodParticles(player1, particleCount, playerBody.position);
@@ -561,8 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         continue;
                     }
                     
-                    player2LastHitTime = currentTime;
-                    
+                        player2LastHitTime = currentTime;
+                            
                     // Get player and spike bodies
                     const playerBody = pair.bodyA.label === 'player2' ? pair.bodyA : pair.bodyB;
                     const spikeBody = pair.bodyA.label === 'spike' ? pair.bodyA : pair.bodyB;
@@ -570,34 +599,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Calculate collision vector
                     collisionVector.x = playerBody.position.x - spikeBody.position.x;
                     collisionVector.y = playerBody.position.y - spikeBody.position.y;
-                    
-                    // For spike bodies that are rectangles (the spike shaft)
-                    let spikeAngle = 0;
+                            
+                            // For spike bodies that are rectangles (the spike shaft)
+                            let spikeAngle = 0;
                     if (spikeBody.angle !== undefined) {
                         spikeAngle = spikeBody.angle;
-                    }
-                    
-                    // Calculate the normalized direction of the spike
+                            }
+                            
+                            // Calculate the normalized direction of the spike
                     spikeDirection.x = Math.cos(spikeAngle);
                     spikeDirection.y = Math.sin(spikeAngle);
-                    
-                    // Calculate how head-on the collision is
+                            
+                            // Calculate how head-on the collision is
                     normalizeVector(collisionVector, 1, normalizedVector);
                     const dotProduct = normalizedVector.x * spikeDirection.x + normalizedVector.y * spikeDirection.y;
-                    
-                    // Convert to an angle-based collision factor (0 to 1)
-                    const collisionFactor = Math.abs(dotProduct);
-                    
+                            
+                            // Convert to an angle-based collision factor (0 to 1)
+                            const collisionFactor = Math.abs(dotProduct);
+                            
                     // Only apply damage for tip collisions
-                    if (collisionFactor > 0.7) {
+                            if (collisionFactor > 0.7) {
                         // Calculate damage with optimized math
-                        const baseMultiplier = 1 + (1 - player2Health / initialHealth) * 0.5;
+                                const baseMultiplier = 1 + (1 - player2Health / initialHealth) * 0.5;
                         const angleMultiplier = (collisionFactor - 0.7) * 3.33;
-                        const damage = 10 * baseMultiplier * angleMultiplier;
-                        
+                                const damage = 10 * baseMultiplier * angleMultiplier;
+                                
                         player2Health -= damage;
                         player2.damageLevel = 1 - (player2Health / initialHealth);
-                        
+                                
                         // Limit particles based on damage severity
                         const particleCount = Math.ceil(8 + angleMultiplier * 10); // Reduced particle count
                         createBloodParticles(player2, particleCount, playerBody.position);
@@ -622,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Rotate arena at reduced frequency
             if (frameCount % 2 === 0) { // Only rotate every other frame
-                arenaRotation += arenaRotationSpeed;
+            arenaRotation += arenaRotationSpeed;
                 for (let i = 0; i < walls.length; i++) {
                     Body.setPosition(walls[i], {
                         x: centerX + Math.cos(arenaRotation + (Math.PI * 2 / segments) * i) * gameRadius,
@@ -662,16 +691,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (roundOver && !gameOver && Date.now() - roundEndTime >= roundRestartDelay) {
                     // Start new round
-                    player1Health = initialHealth;
-                    player2Health = initialHealth;
-                    roundOver = false;
-                    
+                player1Health = initialHealth;
+                player2Health = initialHealth;
+                roundOver = false;
+                
                     // Reset player positions
-                    Body.setPosition(player1, { x: centerX - gameRadius * 0.3, y: centerY });
-                    Body.setPosition(player2, { x: centerX + gameRadius * 0.3, y: centerY });
-                    Body.setVelocity(player1, { x: 0, y: 0 });
-                    Body.setVelocity(player2, { x: 0, y: 0 });
-                    
+                Body.setPosition(player1, { x: centerX - gameRadius * 0.3, y: centerY });
+                Body.setPosition(player2, { x: centerX + gameRadius * 0.3, y: centerY });
+                Body.setVelocity(player1, { x: 0, y: 0 });
+                Body.setVelocity(player2, { x: 0, y: 0 });
+                
                     if (isMultiplayerActive && typeof window.gameInterface !== 'undefined') {
                         window.gameInterface.roundOver(false);
                     }
@@ -687,6 +716,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
         console.error("Oyun başlatılırken hata:", error);
         alert("Oyun başlatılırken bir hata oluştu. Lütfen sayfayı yenileyin ve tekrar deneyin.");
+        }
     }
-}
 });
