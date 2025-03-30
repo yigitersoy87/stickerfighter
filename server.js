@@ -2,176 +2,441 @@ const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
+const compression = require('compression'); // Ekledik - sıkıştırma için
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
-  pingInterval: 30000,
-  pingTimeout: 5000,
-  transports: ['websocket']
+  pingInterval: 5000, // Ping aralığı
+  pingTimeout: 10000, // Ping zaman aşımı
+  maxHttpBufferSize: 1e6, // 1 MB maksimum buffer boyutu
+  transports: ['websocket', 'polling'] // WebSocket'i tercih et
 });
 
-// Config
-const PORT = process.env.PORT || 3000;
-const MAX_PLAYERS = 2;
-const TICK_RATE = 30; // 30 FPS
-const SYNC_THRESHOLD = 100; // 100ms max delay
+// Sıkıştırma middleware'ini ekle - tüm yanıtları gzip ile sıkıştır
+app.use(compression());
 
-// Game state
+// Statik dosyaları sunma
+app.use(express.static(path.join(__dirname, ''), {
+  maxAge: '1h' // Tarayıcı önbelleğe 1 saat
+}));
+
+// Ana sayfa
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Oda bilgilerini saklama
 const rooms = {};
-const playerData = {};
+const playersInRooms = {};
+const usernames = {};
+const playerPositions = {}; // Oyuncu pozisyonlarını önbelleğe almak için
 
-// Static files
-app.use(express.static(path.join(__dirname, 'public')));
+// Durum değişkenleri
+let lastUpdateTime = Date.now();
+const UPDATE_RATE = 50; // 20 FPS (50ms)
 
-// Socket.io
+// Her odada maksimum 2 oyuncu olabilir
+const MAX_PLAYERS_PER_ROOM = 2;
+
 io.on('connection', (socket) => {
-  console.log(`Player connected: ${socket.id}`);
+  console.log('Yeni bir kullanıcı bağlandı:', socket.id);
   
-  socket.on('setUsername', (username) => {
-    playerData[socket.id] = { username, room: null };
+  // Ping yanıtını gönder
+  socket.on('ping', () => {
+    socket.emit('pong');
   });
-
-  socket.on('joinRoom', (roomId) => {
-    if (!rooms[roomId]) rooms[roomId] = createRoom(roomId);
-    const room = rooms[roomId];
+  
+  // Kullanıcı adı ayarlama
+  socket.on('setUsername', (username) => {
+    usernames[socket.id] = username;
+    console.log(`Kullanıcı adı ayarlandı: ${socket.id} -> ${username}`);
+  });
+  
+  // Mevcut odaları listeleme - önbelleğe alınmış liste kullan
+  let cachedRoomList = [];
+  let lastRoomListUpdate = 0;
+  
+  socket.on('getRooms', () => {
+    const now = Date.now();
     
-    if (room.players.length >= MAX_PLAYERS) {
-      socket.emit('roomFull');
+    // Oda listesi en son 1 saniye önce güncellendiyse, önbelleği kullan
+    if (now - lastRoomListUpdate < 1000 && cachedRoomList.length > 0) {
+      socket.emit('roomList', cachedRoomList);
       return;
     }
-
-    // Join room
-    socket.join(roomId);
-    room.players.push(socket.id);
-    playerData[socket.id].room = roomId;
     
-    // Assign player number
-    const playerNumber = room.players.length;
-    const username = playerData[socket.id]?.username || `Player ${playerNumber}`;
-    
-    // Initial game state
-    if (playerNumber === 1) {
-      room.state = initGameState();
-      room.state.player1.username = username;
-    } else {
-      room.state.player2.username = username;
-    }
-
-    // Broadcast
-    io.to(roomId).emit('playerJoined', {
-      playerNumber,
-      username,
-      state: compressState(room.state)
+    // Yeni oda listesi oluştur
+    const roomList = Object.keys(rooms).map(roomId => {
+      return {
+        id: roomId,
+        name: rooms[roomId].name,
+        players: rooms[roomId].players.length,
+        maxPlayers: MAX_PLAYERS_PER_ROOM
+      };
     });
-
-    // Start game if full
-    if (room.players.length === MAX_PLAYERS) {
-      startGame(roomId);
-    }
+    
+    // Önbelleği güncelle
+    cachedRoomList = roomList;
+    lastRoomListUpdate = now;
+    
+    socket.emit('roomList', roomList);
   });
-
-  socket.on('playerInput', (input) => {
-    const roomId = playerData[socket.id]?.room;
+  
+  // Yeni oda oluşturma
+  socket.on('createRoom', (data) => {
+    const roomName = data.roomName;
+    const username = data.username || usernames[socket.id] || 'Anonim';
+    
+    const roomId = 'room_' + Date.now();
+    rooms[roomId] = {
+      id: roomId,
+      name: roomName,
+      players: [],
+      playerData: {},
+      gameState: {
+        player1: null,
+        player2: null,
+        player1Health: 100,
+        player2Health: 100,
+        player1Score: 0,
+        player2Score: 0,
+        gameStarted: false,
+        roundOver: false,
+        gameOver: false
+      },
+      lastUpdate: Date.now()
+    };
+    
+    // Odaya oyuncuyu ekle
+    joinRoom(socket, roomId, username);
+    
+    // Tüm kullanıcılara oda listesini güncelle
+    io.emit('roomCreated', {
+      id: roomId,
+      name: roomName,
+      players: 1,
+      maxPlayers: MAX_PLAYERS_PER_ROOM
+    });
+    
+    // Önbelleği sıfırla
+    cachedRoomList = [];
+  });
+  
+  // Odaya katılma
+  socket.on('joinRoom', (data) => {
+    const roomId = data.roomId;
+    const username = data.username || usernames[socket.id] || 'Anonim';
+    
+    if (!rooms[roomId]) {
+      socket.emit('error', 'Oda mevcut değil!');
+      return;
+    }
+    
+    if (rooms[roomId].players.length >= MAX_PLAYERS_PER_ROOM) {
+      socket.emit('error', 'Oda dolu!');
+      return;
+    }
+    
+    joinRoom(socket, roomId, username);
+    
+    // Önbelleği sıfırla
+    cachedRoomList = [];
+  });
+  
+  // Oyun durumunu güncelleme
+  socket.on('updateGameState', (data) => {
+    const roomId = playersInRooms[socket.id];
     if (!roomId || !rooms[roomId]) return;
     
-    const playerIdx = rooms[roomId].players.indexOf(socket.id);
-    if (playerIdx === -1) return;
+    // Hangi oyuncu olduğunu belirle
+    const playerIndex = rooms[roomId].players.indexOf(socket.id);
+    if (playerIndex === -1) return;
     
-    // Update input
-    const playerKey = playerIdx === 0 ? 'player1' : 'player2';
-    rooms[roomId].state[playerKey].input = input;
-  });
-
-  socket.on('disconnect', () => {
-    const roomId = playerData[socket.id]?.room;
-    if (roomId && rooms[roomId]) {
-      leaveRoom(socket.id, roomId);
+    // Oyuncu pozisyonunu önbelleğe al
+    playerPositions[socket.id] = data.position;
+    
+    // Sunucu tarafında oyun durumunu güncelle
+    if (playerIndex === 0) {  // Player 1
+      rooms[roomId].gameState.player1 = data.position;
+      rooms[roomId].gameState.player1Health = data.health;
+    } else if (playerIndex === 1) {  // Player 2
+      rooms[roomId].gameState.player2 = data.position;
+      rooms[roomId].gameState.player2Health = data.health;
     }
-    delete playerData[socket.id];
+    
+    // Son güncelleme zamanını kaydet
+    rooms[roomId].lastUpdate = Date.now();
+  });
+  
+  // Çarpışma bildirimi - fizik çarpışmaları için kullanılır
+  socket.on('reportCollision', (data) => {
+    const roomId = playersInRooms[socket.id];
+    if (!roomId || !rooms[roomId]) return;
+    
+    // Sunucu tarafında çarpışmayı işle
+    const playerIndex = rooms[roomId].players.indexOf(socket.id);
+    if (playerIndex === -1) return;
+    
+    // Hangi oyuncunun hasar aldığını belirle
+    if (data.player === 'player1') {
+      rooms[roomId].gameState.player1Health -= data.damage;
+      if (rooms[roomId].gameState.player1Health < 0) rooms[roomId].gameState.player1Health = 0;
+    } else if (data.player === 'player2') {
+      rooms[roomId].gameState.player2Health -= data.damage;
+      if (rooms[roomId].gameState.player2Health < 0) rooms[roomId].gameState.player2Health = 0;
+    }
+    
+    // Tüm oyunculara çarpışma olayını bildir
+    io.to(roomId).emit('collisionOccurred', {
+      player: data.player,
+      damage: data.damage,
+      position: data.position
+    });
+    
+    // Oyun durumunu kontrol et
+    checkGameState(roomId);
+  });
+  
+  // Skoru güncelleme
+  socket.on('updateScore', (data) => {
+    const roomId = playersInRooms[socket.id];
+    if (!roomId || !rooms[roomId]) return;
+    
+    rooms[roomId].gameState.player1Score = data.player1Score;
+    rooms[roomId].gameState.player2Score = data.player2Score;
+    rooms[roomId].gameState.roundOver = data.roundOver;
+    rooms[roomId].gameState.gameOver = data.gameOver;
+    
+    io.to(roomId).emit('scoreUpdate', {
+      player1Score: data.player1Score,
+      player2Score: data.player2Score,
+      roundOver: data.roundOver,
+      gameOver: data.gameOver,
+      winner: data.winner
+    });
+    
+    // Oyun bitti mi?
+    if (data.gameOver) {
+      setTimeout(() => {
+        if (!rooms[roomId]) return; // Oda hala mevcut mu kontrol et
+        
+        rooms[roomId].gameState.player1Score = 0;
+        rooms[roomId].gameState.player2Score = 0;
+        rooms[roomId].gameState.player1Health = 100;
+        rooms[roomId].gameState.player2Health = 100;
+        rooms[roomId].gameState.roundOver = false;
+        rooms[roomId].gameState.gameOver = false;
+        
+        io.to(roomId).emit('gameReset');
+      }, 5000);
+    }
+  });
+  
+  // Yeni raund başlatma
+  socket.on('startNewRound', () => {
+    const roomId = playersInRooms[socket.id];
+    if (!roomId || !rooms[roomId]) return;
+    
+    rooms[roomId].gameState.player1Health = 100;
+    rooms[roomId].gameState.player2Health = 100;
+    rooms[roomId].gameState.roundOver = false;
+    
+    io.to(roomId).emit('newRound');
+  });
+  
+  // Oyuncu ayrılırsa
+  socket.on('disconnect', () => {
+    console.log('Bir kullanıcı ayrıldı:', socket.id);
+    
+    // Odadan çıkart
+    const roomId = playersInRooms[socket.id];
+    if (roomId && rooms[roomId]) {
+      leaveRoom(socket, roomId);
+    }
+    
+    // Kullanıcı adını temizle
+    delete usernames[socket.id];
+    
+    // Oyuncu pozisyonlarını temizle
+    delete playerPositions[socket.id];
+    
+    // Önbelleği sıfırla
+    cachedRoomList = [];
+  });
+  
+  // Odadan ayrılma
+  socket.on('leaveRoom', () => {
+    const roomId = playersInRooms[socket.id];
+    if (roomId && rooms[roomId]) {
+      leaveRoom(socket, roomId);
+      
+      // Önbelleği sıfırla
+      cachedRoomList = [];
+    }
   });
 });
 
-// Game functions
-function createRoom(roomId) {
-  return {
-    id: roomId,
-    players: [],
-    state: null,
-    lastTick: Date.now()
-  };
-}
-
-function initGameState() {
-  return {
-    player1: { x: 300, y: 300, input: {}, health: 100, username: '' },
-    player2: { x: 500, y: 300, input: {}, health: 100, username: '' },
-    ball: { x: 400, y: 300 },
-    lastUpdate: Date.now()
-  };
-}
-
-function startGame(roomId) {
-  const room = rooms[roomId];
-  if (!room) return;
+// Düzenli durum yayınları - throttled
+setInterval(() => {
+  const now = Date.now();
+  if (now - lastUpdateTime < UPDATE_RATE) return;
+  lastUpdateTime = now;
   
-  // Sync seed for deterministic physics
-  const startTime = Date.now() + 1000; // 1 second countdown
-  const seed = Math.floor(Math.random() * 10000);
+  // Tüm aktif odalar için durumu yayınla
+  Object.keys(rooms).forEach(roomId => {
+    const room = rooms[roomId];
+    
+    // Sadece en az 1 oyuncu olan ve son güncellemeden sonra değişmiş odaları işle
+    if (room.players.length > 0 && room.lastUpdate > now - 2000) {
+      io.to(roomId).emit('gameStateUpdate', room.gameState);
+    }
+  });
+}, UPDATE_RATE);
+
+// Odaya katılma fonksiyonu
+function joinRoom(socket, roomId, username) {
+  // Daha önce başka bir odadaysa çıkart
+  if (playersInRooms[socket.id]) {
+    leaveRoom(socket, playersInRooms[socket.id]);
+  }
   
-  // Send initial state
-  io.to(roomId).emit('gameStart', {
-    startTime,
-    seed,
-    initialState: compressState(room.state)
+  // Yeni odaya ekle
+  socket.join(roomId);
+  rooms[roomId].players.push(socket.id);
+  playersInRooms[socket.id] = roomId;
+  
+  // Kullanıcı adını kaydet
+  if (!usernames[socket.id] && username) {
+    usernames[socket.id] = username;
+  }
+  
+  // Oyuncu verilerini kaydet
+  rooms[roomId].playerData[socket.id] = {
+    username: usernames[socket.id] || 'Anonim',
+    joinTime: Date.now()
+  };
+  
+  // Odadaki tüm oyuncuların verilerini al
+  const playersData = rooms[roomId].players.map(playerId => {
+    return {
+      id: playerId,
+      username: rooms[roomId].playerData[playerId].username,
+      joinTime: rooms[roomId].playerData[playerId].joinTime
+    };
   });
   
-  // Start game loop
-  room.gameLoop = setInterval(() => updateGame(roomId), 1000 / TICK_RATE);
+  // Oyuncunun odaya katıldığını bildir
+  socket.emit('joinedRoom', {
+    roomId: roomId,
+    roomName: rooms[roomId].name,
+    playerNumber: rooms[roomId].players.indexOf(socket.id) + 1,
+    totalPlayers: rooms[roomId].players.length,
+    players: playersData
+  });
+  
+  // Odadaki diğer oyunculara yeni oyuncunun katıldığını bildir
+  socket.to(roomId).emit('playerJoined', {
+    id: socket.id,
+    username: usernames[socket.id] || 'Anonim',
+    totalPlayers: rooms[roomId].players.length
+  });
+  
+  // İkinci oyuncu katıldıysa ve oda doluysa, oyunu başlat
+  if (rooms[roomId].players.length === MAX_PLAYERS_PER_ROOM) {
+    startGame(roomId);
+  }
 }
 
-function updateGame(roomId) {
-  const room = rooms[roomId];
-  if (!room || room.players.length < MAX_PLAYERS) return;
+// Odadan ayrılma fonksiyonu
+function leaveRoom(socket, roomId) {
+  // Oyuncunun odadan ayrıldığını bildir
+  socket.to(roomId).emit('playerLeft', {
+    id: socket.id,
+    username: usernames[socket.id] || 'Anonim',
+    totalPlayers: rooms[roomId].players.length - 1
+  });
   
-  const now = Date.now();
-  const delta = (now - room.lastTick) / 1000;
-  room.lastTick = now;
+  // Odadan ayrıl
+  socket.leave(roomId);
   
-  // Apply inputs
-  applyPhysics(room.state, delta);
+  // Odanın listesinden kaldır
+  const playerIndex = rooms[roomId].players.indexOf(socket.id);
+  if (playerIndex !== -1) {
+    rooms[roomId].players.splice(playerIndex, 1);
+  }
   
-  // Check game state
-  checkCollisions(room.state);
-  checkWinConditions(roomId);
+  // Oyuncu verisini temizle
+  delete rooms[roomId].playerData[socket.id];
   
-  // Broadcast compressed state
-  io.to(roomId).emit('gameUpdate', compressState(room.state));
+  // Artık hiç oyuncu yoksa odayı sil
+  if (rooms[roomId].players.length === 0) {
+    delete rooms[roomId];
+  }
+  
+  // Oyuncunun oda kaydını sil
+  delete playersInRooms[socket.id];
+  
+  // Kendi uyarısını bildir
+  socket.emit('leftRoom');
 }
 
-function compressState(state) {
-  return {
-    p1: `${state.player1.x}|${state.player1.y}|${state.player1.health}`,
-    p2: `${state.player2.x}|${state.player2.y}|${state.player2.health}`,
-    b: `${state.ball.x}|${state.ball.y}`,
-    t: Date.now()
-  };
+// Oyunu başlat
+function startGame(roomId) {
+  if (!rooms[roomId]) return;
+  
+  // Başlangıç zamanını belirle (250ms sonrası için)
+  const startTime = Date.now() + 250;
+  
+  // Oyunun eş zamanlı başlaması için zamanı gönder
+  io.to(roomId).emit('gameStart', {
+    timestamp: startTime,
+    initialState: rooms[roomId].gameState,
+    timeSeed: Math.floor(Date.now() / 1000)
+  });
+  
+  // Oyunun başladığını işaretle
+  rooms[roomId].gameState.gameStarted = true;
 }
 
-function leaveRoom(playerId, roomId) {
-  const room = rooms[roomId];
-  if (!room) return;
+// Oyun durumunu kontrol et ve güncelle
+function checkGameState(roomId) {
+  if (!rooms[roomId]) return;
   
-  const index = room.players.indexOf(playerId);
-  if (index !== -1) {
-    room.players.splice(index, 1);
-    io.to(roomId).emit('playerLeft', { playerNumber: index + 1 });
-    
-    if (room.players.length === 0) {
-      clearInterval(room.gameLoop);
-      delete rooms[roomId];
+  const gameState = rooms[roomId].gameState;
+  
+  // Oyuncu sağlıkları 0'a düştüyse raund biter
+  if (gameState.player1Health <= 0 || gameState.player2Health <= 0) {
+    if (!gameState.roundOver) {
+      gameState.roundOver = true;
+      
+      // Kazanan oyuncunun skorunu artır
+      if (gameState.player1Health <= 0) {
+        gameState.player2Score += 1;
+      } else {
+        gameState.player1Score += 1;
+      }
+      
+      // Kazanan belirlendiyse oyun biter
+      if (gameState.player1Score >= 3 || gameState.player2Score >= 3) {
+        gameState.gameOver = true;
+        gameState.winner = gameState.player1Score >= 3 ? 'player1' : 'player2';
+      }
+      
+      // Raund sonu bilgisini gönder
+      io.to(roomId).emit('scoreUpdate', {
+        player1Score: gameState.player1Score,
+        player2Score: gameState.player2Score,
+        roundOver: gameState.roundOver,
+        gameOver: gameState.gameOver,
+        winner: gameState.winner
+      });
     }
   }
 }
 
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Sunucuyu başlat
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Sunucu ${PORT} portunda çalışıyor`);
+}); 
