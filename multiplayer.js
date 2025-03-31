@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Initialize socket connection
-const SOCKET_URL = 'https://your-websocket-server.com';  // We'll need to replace this with a real WebSocket server URL
+const SOCKET_URL = 'https://stickerfighter.onrender.com';
 
 const socket = io(SOCKET_URL, {
     transports: ['websocket', 'polling']
@@ -27,11 +27,13 @@ const player1Icon = document.getElementById('player1-icon');
 const player1Name = document.getElementById('player1-name');
 const player2Icon = document.getElementById('player2-icon');
 const player2Name = document.getElementById('player2-name');
+const startGameBtn = document.getElementById('start-game-btn');
 
 // Game state
 let currentRoom = null;
 let username = '';
 let isGameStarted = false;
+let isHost = false;
 
 // Socket connection status
 socket.on('connect', () => {
@@ -137,6 +139,8 @@ socket.on('joinedRoom', (data) => {
     currentRoom = data.roomId;
     
     waitingRoomName.textContent = `Oda: ${data.roomName}`;
+    isHost = data.playerNumber === 1;
+    startGameBtn.style.display = isHost ? 'block' : 'none';
     waitingPlayerCount.textContent = `Oyuncular: ${data.totalPlayers}/2`;
     
     lobbyScreen.style.display = 'none';
@@ -149,6 +153,14 @@ socket.on('playerJoined', (data) => {
     if (data.totalPlayers === 2) {
         player2Icon.classList.remove('waiting');
         player2Name.textContent = 'Rakip';
+    }
+});
+
+// Start game button handler
+startGameBtn.addEventListener('click', () => {
+    if (isHost) {
+        socket.emit('startGame');
+        startGameBtn.style.display = 'none';
     }
 });
 
@@ -175,6 +187,17 @@ socket.on('gameStart', (data) => {
 socket.on('gameStateUpdate', (gameState) => {
     if (window.GameAPI) {
         window.GameAPI.update(gameState);
+        
+        // Update health displays
+        if (gameState.health) {
+            const player1HealthElement = document.getElementById('player1-health');
+            const player2HealthElement = document.getElementById('player2-health');
+            
+            if (player1HealthElement && player2HealthElement) {
+                player1HealthElement.style.width = `${gameState.health.player1}%`;
+                player2HealthElement.style.width = `${gameState.health.player2}%`;
+            }
+        }
     }
 });
 
