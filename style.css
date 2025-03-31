@@ -260,3 +260,29 @@ body {
     display: none;
     z-index: 20;
 }
+
+/* Health Bars */
+.health-container {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    z-index: 30;
+}
+
+.health-bar {
+    width: 200px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.health-fill {
+    height: 100%;
+    background: #2ecc71;
+    transition: width 0.3s ease;
+    width: 100%;
+}
