@@ -31,6 +31,7 @@ app.get('/', (req, res) => {
 const rooms = {};
 const playersInRooms = {};
 const usernames = {};
+const hostSockets = {};
 
 io.on('connection', (socket) => {
   console.log('New user connected:', socket.id);
@@ -63,11 +64,16 @@ io.on('connection', (socket) => {
   socket.on('createRoom', (data) => {
     const roomId = 'room_' + Date.now();
     rooms[roomId] = {
+      host: socket.id,
       id: roomId,
       name: data.roomName,
       players: [],
       gameState: {
         balls: [],
+        health: {
+          player1: 100,
+          player2: 100
+        },
         gameStarted: false
       }
     };
@@ -96,12 +102,25 @@ io.on('connection', (socket) => {
     joinRoom(socket, data.roomId);
   });
   
+  socket.on('startGame', () => {
+    const roomId = playersInRooms[socket.id];
+    if (roomId && rooms[roomId] && rooms[roomId].host === socket.id) {
+      io.to(roomId).emit('gameStart', {
+        timestamp: Date.now() + 3000
+      });
+    }
+  });
+  
   socket.on('updateGameState', (data) => {
     const roomId = playersInRooms[socket.id];
     if (!roomId || !rooms[roomId]) return;
 
     // Update ball positions in game state
     rooms[roomId].gameState.balls = data.balls;
+    
+    if (data.health) {
+      rooms[roomId].gameState.health = data.health;
+    }
     
     socket.to(roomId).emit('gameStateUpdate', rooms[roomId].gameState);
   });
@@ -123,23 +142,22 @@ function joinRoom(socket, roomId) {
   socket.join(roomId);
   rooms[roomId].players.push(socket.id);
   playersInRooms[socket.id] = roomId;
+
+  if (rooms[roomId].players.length === 1) {
+    rooms[roomId].host = socket.id;
+  }
   
   socket.emit('joinedRoom', {
     roomId: roomId,
     roomName: rooms[roomId].name,
     playerNumber: rooms[roomId].players.length,
+    isHost: socket.id === rooms[roomId].host,
     totalPlayers: rooms[roomId].players.length
   });
   
   socket.to(roomId).emit('playerJoined', {
     totalPlayers: rooms[roomId].players.length
   });
-  
-  if (rooms[roomId].players.length === 2) {
-    io.to(roomId).emit('gameStart', {
-      timestamp: Date.now() + 3000
-    });
-  }
 }
 
 function leaveRoom(socket, roomId) {
