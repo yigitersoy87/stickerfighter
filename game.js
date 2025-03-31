@@ -3,6 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameInitialized = false;
     let isMultiplayerActive = false;
 
+    // Game sync interval
+    let syncInterval = null;
+
     // Game engine objects and states
     let engine, render, runner, pixiApp;
     let balls = [];
@@ -148,16 +151,34 @@ document.addEventListener('DOMContentLoaded', () => {
             window.GameAPI = {
                 start: function() {
                     isMultiplayerActive = true;
+                    
+                    // Start syncing game state
+                    if (syncInterval) clearInterval(syncInterval);
+                    syncInterval = setInterval(() => {
+                        if (isMultiplayerActive && balls.length > 0) {
+                            const ballPositions = balls.map(ball => ({
+                                x: ball.position.x,
+                                y: ball.position.y
+                            }));
+                            
+                            socket.emit('updateGameState', {
+                                balls: ballPositions
+                            });
+                        }
+                    }, 1000 / 30); // 30fps sync rate
+                    
                     resetGame();
                 },
                 update: function(gameState) {
                     if (!isMultiplayerActive) return;
                     
-                    // Update ball positions if provided by server
                     if (gameState.balls) {
-                        gameState.balls.forEach((pos, index) => {
+                        gameState.balls.forEach((ballData, index) => {
                             if (balls[index]) {
-                                Matter.Body.setPosition(balls[index], pos);
+                                Matter.Body.setPosition(balls[index], {
+                                    x: ballData.x,
+                                    y: ballData.y
+                                });
                             }
                         });
                     }
