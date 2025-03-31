@@ -15,9 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let engine, render, runner, pixiApp;
     let balls = [];
     const NUM_BALLS = 2;
-    let centerX, centerY, gameRadius, platform;
+    let centerX, centerY, gameRadius;
     let roundOver = false, gameOver = false;
-    let rotationSpeed = 0.02;
 
     // Global API object
     window.GameAPI = null;
@@ -142,13 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const walls = [];
             const segments = 32;
             
-            // Create rotating platform
-            platform = Bodies.rectangle(centerX, centerY, gameRadius * 2, 10, {
-                isStatic: true,
-                render: { fillStyle: '#FFD700' },
-                label: 'platform'
-            });
-            
             for (let i = 0; i < segments; i++) {
                 const angle = (Math.PI * 2 / segments) * i;
                 const nextAngle = (Math.PI * 2 / segments) * (i + 1);
@@ -172,15 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Add all objects to the world
-            Composite.add(engine.world, [...balls, ...walls, ...spikes, platform]);
+            Composite.add(engine.world, [...balls, ...walls, ...spikes]);
 
             // Update ball velocities periodically to maintain motion
             Events.on(engine, 'beforeUpdate', () => {
-                // Rotate platform
-                if (platform) {
-                    Body.rotate(platform, rotationSpeed);
-                }
-                
                 balls.forEach(ball => {
                     const velocity = ball.velocity;
                     const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
@@ -215,8 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             socket.emit('updateGameState', {
                                 balls: ballPositions,
-                                health: { player1: player1Health, player2: player2Health },
-                                platformAngle: platform ? platform.angle : 0
+                                health: { player1: player1Health, player2: player2Health }
                             }); 
                         }
                     }, 1000 / 30); // 30fps sync rate
@@ -236,10 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                     });
                                 }
                             });
-                            
-                            if (platform && typeof gameState.platformAngle === 'number') {
-                                Body.setAngle(platform, gameState.platformAngle);
-                            }
                         } catch (error) {
                             console.error('Error updating game state:', error);
                         }
