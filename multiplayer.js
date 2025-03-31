@@ -126,8 +126,14 @@ socket.on('roomList', (rooms) => {
 // Create room
 createRoomBtn.addEventListener('click', () => {
     const roomName = roomNameInput.value.trim();
+    if (createRoomBtn.disabled) return;
+    
     if (roomName && roomName.length >= 3) {
+        createRoomBtn.disabled = true;
         socket.emit('createRoom', { roomName });
+        setTimeout(() => {
+            createRoomBtn.disabled = false;
+        }, 2000);
         roomNameInput.value = '';
     } else {
         showMessage('Oda ismi en az 3 karakter olmalıdır', true);
