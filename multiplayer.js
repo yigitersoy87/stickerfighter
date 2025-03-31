@@ -226,6 +226,7 @@ socket.on('playerJoined', (data) => {
     
     // İlk oyuncu dışında bir oyuncu odaya katıldıysa
     if (data.totalPlayers === 2 && playerNumber === 1) {
+        socket.emit('startGame', { roomId: currentRoom });
         showGameMessage(`${otherPlayerUsername} odaya katıldı! Oyun başlatılıyor...`, true);
     }
 });

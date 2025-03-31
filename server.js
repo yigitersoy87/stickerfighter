@@ -216,6 +216,23 @@ io.on('connection', (socket) => {
       winner: data.winner
     });
     
+    
+  socket.on('startGame', (data) => {
+    const roomId = data.roomId;
+    if (!roomId || !rooms[roomId]) return;
+
+    const timestamp = Date.now() + 2000; // 2 saniye sonra başlasın
+    const timeSeed = Math.floor(Date.now() / 1000); // Oyun senkronizasyonu için seed
+
+    io.to(roomId).emit('gameStart', {
+      timestamp,
+      timeSeed
+    });
+
+    rooms[roomId].gameState.gameStarted = true;
+  });
+
+
     // Oyun bitti mi?
     if (data.gameOver) {
       setTimeout(() => {
