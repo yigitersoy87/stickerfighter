@@ -21,51 +21,51 @@ document.addEventListener('DOMContentLoaded', () => {
             initGame();
         }
     }, 200);
-    
+
     function initGame() {
         console.log("initGame() başladı.");
-    try {
-        const canvas = document.getElementById('game-canvas');
-        const container = document.querySelector('.game-container');
-        const pixiContainer = document.getElementById('pixi-container');
-        
-        if (!canvas || !container || !pixiContainer) {
+        try {
+            const canvas = document.getElementById('game-canvas');
+            const container = document.querySelector('.game-container');
+            const pixiContainer = document.getElementById('pixi-container');
+
+            if (!canvas || !container || !pixiContainer) {
                 throw new Error("Gerekli DOM elemanları bulunamadı!");
-        }
+            }
             console.log("DOM elemanları bulundu.");
-        
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        
+
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+
             // PIXI App oluşturma
             console.log("PIXI App oluşturuluyor...");
             pixiApp = new PIXI.Application({
-            width: container.clientWidth,
-            height: container.clientHeight,
-            transparent: true,
-            antialias: true,
+                width: container.clientWidth,
+                height: container.clientHeight,
+                transparent: true,
+                antialias: true,
                 resolution: window.devicePixelRatio || 1, // Optimize for device
-            backgroundAlpha: 0,
+                backgroundAlpha: 0,
                 clearBeforeRender: true,
                 powerPreference: "high-performance" // Request high-performance GPU mode
-        });
-        pixiContainer.innerHTML = '';
-        pixiContainer.appendChild(pixiApp.view);
-        pixiApp.view.style.width = '100%';
-        pixiApp.view.style.height = '100%';
-        pixiApp.stage.sortableChildren = true;
+            });
+            pixiContainer.innerHTML = '';
+            pixiContainer.appendChild(pixiApp.view);
+            pixiApp.view.style.width = '100%';
+            pixiApp.view.style.height = '100%';
+            pixiApp.stage.sortableChildren = true;
             console.log("PIXI App oluşturuldu.");
-        
+
             // Particle Container
             particleContainer = new PIXI.ParticleContainer(500, {
-            scale: true,
-            position: true,
-            rotation: true,
+                scale: true,
+                position: true,
+                rotation: true,
                 alpha: true,
                 uvs: false // Disable unnecessary features
-        });
-        particleContainer.zIndex = 10;
-        pixiApp.stage.addChild(particleContainer);
+            });
+            particleContainer.zIndex = 10;
+            pixiApp.stage.addChild(particleContainer);
             console.log("Particle Container oluşturuldu.");
 
             // Matter.js modülleri
@@ -85,17 +85,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Renderer
             console.log("Matter Render oluşturuluyor...");
             render = Render.create({
-            canvas: canvas,
-            engine: engine,
-            options: {
-                width: canvas.width,
-                height: canvas.height,
-                wireframes: false,
+                canvas: canvas,
+                engine: engine,
+                options: {
+                    width: canvas.width,
+                    height: canvas.height,
+                    wireframes: false,
                     background: '#007a33',
                     pixelRatio: 1 // Force 1:1 pixel ratio for better performance
-            }
-        });
-        Render.run(render);
+                }
+            });
+            Render.run(render);
             console.log("Matter Render çalıştırıldı.");
 
             // Runner
@@ -111,9 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
             gameRadius = Math.min(canvas.width, canvas.height) * 0.45;
             centerX = canvas.width / 2;
             centerY = canvas.height / 2;
-        const wallThickness = 20;
-        const playerRadius = gameRadius * 0.08;
-        const targetSpeed = 7;
+            const wallThickness = 20;
+            const playerRadius = gameRadius * 0.08;
+            const targetSpeed = 7;
             const arenaRotationSpeed = 0.001; // Reduced rotation speed for better performance
 
             initialHealth = 100;
@@ -128,51 +128,51 @@ document.addEventListener('DOMContentLoaded', () => {
             roundOver = false;
             let roundEndTime = 0;
             const roundRestartDelay = 2000;
-        
+            
             bloodParticles = [];
             const MAX_BLOOD_PARTICLES = 100;
-        
-        const arenaContainer = Composite.create();
-        let arenaRotation = 0;
-        
+            
+            const arenaContainer = Composite.create();
+            let arenaRotation = 0;
+            
             const segments = 20;
-        const walls = [];
-        const spikes = [];
-        const numSpikes = 4;
-        const spikeLength = gameRadius * 0.2;
-        const spikeWidth = 6;
-        
+            const walls = [];
+            const spikes = [];
+            const numSpikes = 4;
+            const spikeLength = gameRadius * 0.2;
+            const spikeWidth = 6;
+
             // --- Yardımcı Çizim Fonksiyonları (Kullanımdan Önce Tanımla) ---
-        function drawHealthBars(ctx) {
+            function drawHealthBars(ctx) {
                 const barWidth = 150; // Biraz küçültüldü
                 const barHeight = 25;
                 const margin = 15;
                 
                 // Player 1 Health Bar
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-            ctx.fillRect(margin, margin, barWidth, barHeight);
-            ctx.fillStyle = '#FFD700';
+                ctx.fillRect(margin, margin, barWidth, barHeight);
+                ctx.fillStyle = '#FFD700';
                 ctx.fillRect(margin, margin, barWidth * Math.max(0, player1Health / initialHealth), barHeight);
-            ctx.strokeStyle = '#FFD700';
+                ctx.strokeStyle = '#FFD700';
                 ctx.lineWidth = 1;
-            ctx.strokeRect(margin, margin, barWidth, barHeight);
+                ctx.strokeRect(margin, margin, barWidth, barHeight);
                 ctx.fillStyle = '#FFFFFF';
                 ctx.font = 'bold 14px Arial';
-            ctx.textAlign = 'center';
+                ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle'; 
                 ctx.fillText(`${Math.ceil(player1Health)}%`, margin + barWidth / 2, margin + barHeight / 2);
-                
+                    
                 // Player 2 Health Bar
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-            ctx.fillRect(canvas.width - margin - barWidth, margin, barWidth, barHeight);
-            ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(canvas.width - margin - barWidth, margin, barWidth, barHeight);
+                ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(canvas.width - margin - barWidth, margin, barWidth * Math.max(0, player2Health / initialHealth), barHeight);
-            ctx.strokeStyle = '#FFFFFF';
+                ctx.strokeStyle = '#FFFFFF';
                 ctx.lineWidth = 1;
-            ctx.strokeRect(canvas.width - margin - barWidth, margin, barWidth, barHeight);
+                ctx.strokeRect(canvas.width - margin - barWidth, margin, barWidth, barHeight);
                 ctx.fillStyle = '#000000'; // Beyaz bar üzerinde siyah yazı
                 ctx.font = 'bold 14px Arial';
-            ctx.textAlign = 'center';
+                ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(`${Math.ceil(player2Health)}%`, canvas.width - margin - barWidth / 2, margin + barHeight / 2);
                 
@@ -180,14 +180,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const player1DisplayName = (window.gameInterface && window.gameInterface.username) ? (playerNumber === 1 ? window.gameInterface.username : window.gameInterface.otherPlayerUsername) : 'Player 1';
                 const player2DisplayName = (window.gameInterface && window.gameInterface.username) ? (playerNumber === 2 ? window.gameInterface.username : window.gameInterface.otherPlayerUsername) : 'Player 2';
                 
-            ctx.fillStyle = '#FFD700';
-            ctx.textAlign = 'left';
-            ctx.font = 'bold 16px Arial';
+                ctx.fillStyle = '#FFD700';
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 16px Arial';
                 ctx.fillText(`${player1DisplayName}: ${player1Score}`, margin, margin + barHeight + 10);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.textAlign = 'right';
+                ctx.fillStyle = '#FFFFFF';
+                ctx.textAlign = 'right';
                 ctx.fillText(`${player2DisplayName}: ${player2Score}`, canvas.width - margin, margin + barHeight + 10);
-                
+                    
                 // Game status messages
                 if (gameOver) {
                     ctx.fillStyle = winner === 'player1' ? '#FFD700' : '#FFFFFF';
@@ -207,48 +207,48 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.font = 'bold 16px Arial';
                     ctx.fillText(`Score: ${player1Score} - ${player2Score}`, centerX, centerY + 30);
                 }
-        }
-        
-        function createBloodParticles(player, count, position) {
-            const particleSize = playerRadius * 0.15;
+            }
+
+            function createBloodParticles(player, count, position) {
+                const particleSize = playerRadius * 0.15;
                 const maxCount = Math.min(15, count);
-            const playerColor = (player === player1) ? '#FFD700' : '#FFFFFF';
+                const playerColor = (player === player1) ? '#FFD700' : '#FFFFFF';
                 while (bloodParticles.length >= MAX_BLOOD_PARTICLES) bloodParticles.shift();
                 for (let i = 0; i < maxCount; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 0.5 + Math.random() * 2;
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 0.5 + Math.random() * 2;
                     bloodParticles.push({ x: position.x, y: position.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: particleSize * (0.5 + Math.random() * 0.5), color: playerColor, alpha: 1, life: 30 + Math.random() * 20 });
+                }
             }
-        }
-        
-        function drawBloodParticles(ctx) {
+
+            function drawBloodParticles(ctx) {
                 ctx.save();
                 let particle;
                 let i = bloodParticles.length - 1;
                 for (; i >= 0; i--) {
                     particle = bloodParticles[i];
-                particle.x += particle.vx;
-                particle.y += particle.vy;
-                particle.alpha -= 1 / particle.life;
-                particle.life--;
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.alpha -= 1 / particle.life;
+                    particle.life--;
                     if (particle.alpha > 0.1) {
-                ctx.globalAlpha = Math.max(0, particle.alpha);
-                ctx.fillStyle = particle.color;
-                ctx.beginPath();
-                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-                ctx.fill();
+                        ctx.globalAlpha = Math.max(0, particle.alpha);
+                        ctx.fillStyle = particle.color;
+                        ctx.beginPath();
+                        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                        ctx.fill();
                     }
-                if (particle.life <= 0) bloodParticles.splice(i, 1);
-            }
+                    if (particle.life <= 0) bloodParticles.splice(i, 1);
+                }
                 ctx.restore();
-        }
+            }
 
             // Cache spike positions for performance
             const spikeCache = [];
             function setupSpikeCache() { /* ... önceki kod ... */ }
             setTimeout(setupSpikeCache, 100);
-        
-        function addNailEffects(ctx) {
+
+            function addNailEffects(ctx) {
                 // Use cached spike data instead of accessing physics objects
                  for (let i = 0; i < spikeCache.length; i++) {
                      const spike = spikeCache[i];
@@ -261,10 +261,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Track previous damage levels to avoid unnecessary redraws
             let player1DamageLevelPrev = -1;
             let player2DamageLevelPrev = -1;
-        function drawPlayerDamage(ctx, player, healthPercent) {
-            const pos = player.position;
-            const radius = player.circleRadius;
-            const damageLevel = 1 - healthPercent;
+            function drawPlayerDamage(ctx, player, healthPercent) {
+                const pos = player.position;
+                const radius = player.circleRadius;
+                const damageLevel = 1 - healthPercent;
                 const currentDamageLevel = Math.floor(damageLevel * 10);
                 let prevLevel = player.label === 'player1' ? player1DamageLevelPrev : player2DamageLevelPrev;
                 if (currentDamageLevel === prevLevel) return;
@@ -275,22 +275,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // --- Arena Sınırı ve Oyuncu Ekleme --- 
             player1 = Bodies.circle(centerX - gameRadius * 0.3, centerY, playerRadius, {
-            restitution: 1,
-            friction: 0,
-            frictionAir: 0.0005,
-            render: { fillStyle: '#FFD700' },
-            label: 'player1',
-            damageLevel: 0
-        });
-        
+                restitution: 1,
+                friction: 0,
+                frictionAir: 0.0005,
+                render: { fillStyle: '#FFD700' },
+                label: 'player1',
+                damageLevel: 0
+            });
+
             player2 = Bodies.circle(centerX + gameRadius * 0.3, centerY, playerRadius, {
-            restitution: 1,
-            friction: 0,
-            frictionAir: 0.0005,
-            render: { fillStyle: '#FFFFFF' },
-            label: 'player2',
-            damageLevel: 0
-        });
+                restitution: 1,
+                friction: 0,
+                frictionAir: 0.0005,
+                render: { fillStyle: '#FFFFFF' },
+                label: 'player2',
+                damageLevel: 0
+            });
             console.log("Oyuncu nesneleri oluşturuldu.");
 
             // Duvar ve Çivileri Oluştur
@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Tüm nesneleri dünyaya ekle
             console.log("Nesneler dünyaya ekleniyor...");
-        Composite.add(engine.world, [arenaContainer, player1, player2]);
+            Composite.add(engine.world, [arenaContainer, player1, player2]);
             console.log("Nesneler dünyaya eklendi.");
 
             // Olay dinleyicileri (arenaBoundary artık tanımlı)
@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // --- Yardımcı Fizik/Matematik Fonksiyonları ---
             function normalizeVector(vector, magnitude, output) {
-            const currentMagnitude = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+                 const currentMagnitude = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
                  if (currentMagnitude === 0) {
                      output.x = 0;
                      output.y = 0;
@@ -389,31 +389,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Optimize collision detection with caching
-        let player1LastHitTime = 0;
-        let player2LastHitTime = 0;
-        const hitCooldown = 500;
+            let player1LastHitTime = 0;
+            let player2LastHitTime = 0;
+            const hitCooldown = 500;
             const bounceVector = { x: 0, y: 0 };
             const collisionVector = { x: 0, y: 0 };
             const normalizedVector = { x: 0, y: 0 };
             const spikeDirection = { x: 0, y: 0 };
             // normalizeVector fonksiyonu zaten yukarıda tanımlı
-        
+            
             // Çarpışma Olay Dinleyicisi - Düzeltilmiş
-        Events.on(engine, 'collisionStart', (event) => {
+            Events.on(engine, 'collisionStart', (event) => {
                 if (gameOver || roundOver) return;
                 
-            const pairs = event.pairs;
-            const currentTime = Date.now();
+                const pairs = event.pairs;
+                const currentTime = Date.now();
                 
-            for (let i = 0; i < pairs.length; i++) {
-                const pair = pairs[i];
+                for (let i = 0; i < pairs.length; i++) {
+                    const pair = pairs[i];
                     const bodyA = pair.bodyA;
                     const bodyB = pair.bodyB;
                     
                     // Oyuncu 1 vs Spike
                     if ((bodyA.label === 'player1' && bodyB.label === 'spike') || (bodyB.label === 'player1' && bodyA.label === 'spike')) {
-                    if (currentTime - player1LastHitTime > hitCooldown) {
-                        player1LastHitTime = currentTime;
+                        if (currentTime - player1LastHitTime > hitCooldown) {
+                            player1LastHitTime = currentTime;
                             const playerBody = bodyA.label === 'player1' ? bodyA : bodyB;
                             const spikeBody = bodyA.label === 'spike' ? bodyA : bodyB;
                             
@@ -426,14 +426,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             normalizeVector(collisionVector, 1, normalizedVector);
                             const dotProduct = normalizedVector.x * spikeDirection.x + normalizedVector.y * spikeDirection.y;
                             const collisionFactor = Math.abs(dotProduct);
-                            
+
                             if (collisionFactor > 0.6) { // Eşiği biraz düşürdük
                                 const baseMultiplier = 1 + (1 - player1Health / initialHealth) * 0.5;
                                 const angleMultiplier = (collisionFactor - 0.6) * 2.5; // Yeniden ölçekle
                                 const damage = 8 * baseMultiplier * angleMultiplier; // Hasar ayarlandı
                                 
-                        player1Health -= damage;
-                        player1.damageLevel = 1 - (player1Health / initialHealth);
+                                player1Health -= damage;
+                                player1.damageLevel = 1 - (player1Health / initialHealth);
                                 
                                 const particleCount = Math.ceil(5 + angleMultiplier * 10);
                                 createBloodParticles(player1, particleCount, playerBody.position);
@@ -453,8 +453,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Oyuncu 2 vs Spike (Benzer mantık)
                      else if ((bodyA.label === 'player2' && bodyB.label === 'spike') || (bodyB.label === 'player2' && bodyA.label === 'spike')) {
-                    if (currentTime - player2LastHitTime > hitCooldown) {
-                        player2LastHitTime = currentTime;
+                         if (currentTime - player2LastHitTime > hitCooldown) {
+                             player2LastHitTime = currentTime;
                              const playerBody = bodyA.label === 'player2' ? bodyA : bodyB;
                              const spikeBody = bodyA.label === 'spike' ? bodyA : bodyB;
                              
@@ -465,16 +465,16 @@ document.addEventListener('DOMContentLoaded', () => {
                              spikeDirection.y = Math.sin(spikeAngle);
                              normalizeVector(collisionVector, 1, normalizedVector);
                              const dotProduct = normalizedVector.x * spikeDirection.x + normalizedVector.y * spikeDirection.y;
-                            const collisionFactor = Math.abs(dotProduct);
-                            
+                             const collisionFactor = Math.abs(dotProduct);
+ 
                              if (collisionFactor > 0.6) {
-                                const baseMultiplier = 1 + (1 - player2Health / initialHealth) * 0.5;
+                                 const baseMultiplier = 1 + (1 - player2Health / initialHealth) * 0.5;
                                  const angleMultiplier = (collisionFactor - 0.6) * 2.5;
                                  const damage = 8 * baseMultiplier * angleMultiplier;
-                                
-                        player2Health -= damage;
-                        player2.damageLevel = 1 - (player2Health / initialHealth);
-                                
+                                 
+                                 player2Health -= damage;
+                                 player2.damageLevel = 1 - (player2Health / initialHealth);
+                                 
                                  const particleCount = Math.ceil(5 + angleMultiplier * 10);
                                  createBloodParticles(player2, particleCount, playerBody.position);
                                   if(typeof createDebrisParticles === 'function'){
@@ -507,7 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             if (currentTime - player2LastHitTime > 100) {
                                 player2Health -= damageShare;
-                        player2.damageLevel = 1 - (player2Health / initialHealth);
+                                player2.damageLevel = 1 - (player2Health / initialHealth);
                                 createBloodParticles(player2, Math.ceil(damageShare), bodyB.position);
                                 player2LastHitTime = currentTime;
                             }
@@ -557,14 +557,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     // --- Oyuncu Fizik Güncelleme Kodu Başlangıcı ---
-            const healthLossPercent1 = 1 - (player1Health / initialHealth);
-            const healthLossPercent2 = 1 - (player2Health / initialHealth);
+                    const healthLossPercent1 = 1 - (player1Health / initialHealth);
+                    const healthLossPercent2 = 1 - (player2Health / initialHealth);
                     const targetSpeed1 = targetSpeed;
                     const targetSpeed2 = targetSpeed;
                     
                     // Oyuncuları hedef hıza doğru it
-            const speed1 = Math.hypot(player1.velocity.x, player1.velocity.y);
-            const speedDiff1 = targetSpeed1 - speed1;
+                    const speed1 = Math.hypot(player1.velocity.x, player1.velocity.y);
+                    const speedDiff1 = targetSpeed1 - speed1;
                     if (Math.abs(speedDiff1) > targetSpeed1 * 0.1) {
                         const forceMultiplier = (speedDiff1 > 0) ? 0.002 : -0.0005;
                         let forceDir;
@@ -576,12 +576,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             console.error("normalizeVector(player1) hatası:", e, player1.velocity);
                             forceDir = { x: 0, y: 0 }; // Hata durumunda varsayılan
                         }
-                const force = { x: forceDir.x * Math.abs(speedDiff1) * forceMultiplier, y: forceDir.y * Math.abs(speedDiff1) * forceMultiplier };
-                Body.applyForce(player1, player1.position, force);
-            }
+                         const force = { x: forceDir.x * Math.abs(speedDiff1) * forceMultiplier, y: forceDir.y * Math.abs(speedDiff1) * forceMultiplier };
+                        Body.applyForce(player1, player1.position, force);
+                    }
 
-            const speed2 = Math.hypot(player2.velocity.x, player2.velocity.y);
-            const speedDiff2 = targetSpeed2 - speed2;
+                    const speed2 = Math.hypot(player2.velocity.x, player2.velocity.y);
+                    const speedDiff2 = targetSpeed2 - speed2;
                     if (Math.abs(speedDiff2) > targetSpeed2 * 0.1) {
                         const forceMultiplier = (speedDiff2 > 0) ? 0.002 : -0.0005;
                         let forceDir;
@@ -593,9 +593,9 @@ document.addEventListener('DOMContentLoaded', () => {
                              console.error("normalizeVector(player2) hatası:", e, player2.velocity);
                              forceDir = { x: 0, y: 0 }; // Hata durumunda varsayılan
                          }
-                const force = { x: forceDir.x * Math.abs(speedDiff2) * forceMultiplier, y: forceDir.y * Math.abs(speedDiff2) * forceMultiplier };
-                Body.applyForce(player2, player2.position, force);
-            }
+                         const force = { x: forceDir.x * Math.abs(speedDiff2) * forceMultiplier, y: forceDir.y * Math.abs(speedDiff2) * forceMultiplier };
+                        Body.applyForce(player2, player2.position, force);
+                    }
 
                     // Küçük rastgele itmeler (daha az sıklıkla)
                     if (frameCount % 15 === 0) { 
@@ -655,33 +655,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-        function createDebrisParticles(position, count, color) {
+            function createDebrisParticles(position, count, color) {
                 if (!particleContainer || !particleTextures || !particleTextures.circle) return;
                 
                 const particleColor = color === 'gold' ? 0xFFD700 : color === 'white' ? 0xFFFFFF : 0xA9A9A9;
                 const maxCount = Math.min(count, 10); // Parçacık sayısını sınırla
                 
                 for (let i = 0; i < maxCount; i++) {
-                const particle = new PIXI.Sprite(particleTextures.circle);
-                particle.anchor.set(0.5);
-                particle.position.set(position.x, position.y);
+                    const particle = new PIXI.Sprite(particleTextures.circle);
+                    particle.anchor.set(0.5);
+                    particle.position.set(position.x, position.y);
                     const scale = 0.05 + Math.random() * 0.1;
-                particle.scale.set(scale);
-                particle.tint = particleColor;
-                const angle = Math.random() * Math.PI * 2;
+                    particle.scale.set(scale);
+                    particle.tint = particleColor;
+                    const angle = Math.random() * Math.PI * 2;
                     const speed = 0.5 + Math.random() * 2;
-                particle.velocity = { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed };
+                    particle.velocity = { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed };
                     particle.spin = -0.05 + Math.random() * 0.1;
                     particle.gravity = 0.05 + Math.random() * 0.05;
-                particle.friction = 0.98;
+                    particle.friction = 0.98;
                     particle.life = 20 + Math.random() * 10;
                     particle.alpha = 0.8;
-                particle.maxLife = particle.life;
-                particleContainer.addChild(particle);
-                particles.push(particle);
+                    particle.maxLife = particle.life;
+                    particleContainer.addChild(particle);
+                    particles.push(particle);
+                }
             }
-        }
-        
+            
             // Texture oluşturma (sadece bir kez)
             const particleTextures = { circle: createCircleTexture(8, 0xFFFFFF) };
             function createCircleTexture(radius = 8, color = 0xFFFFFF) {
@@ -713,24 +713,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
      // Particle ticker (initGame dışında kalabilir)
      if (pixiApp && pixiApp.ticker) {
-        pixiApp.ticker.add(() => {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const particle = particles[i];
-                particle.velocity.x *= particle.friction;
-                particle.velocity.y *= particle.friction;
-                particle.velocity.y += particle.gravity;
-                particle.position.x += particle.velocity.x;
-                particle.position.y += particle.velocity.y;
-                particle.rotation += particle.spin;
-                particle.life--;
-                particle.alpha = (particle.life / particle.maxLife) * particle.alpha;
-                if (particle.life <= 0) {
-                    particleContainer.removeChild(particle);
-                    particles.splice(i, 1);
-                }
+          pixiApp.ticker.add(() => {
+               for (let i = particles.length - 1; i >= 0; i--) {
+                    const particle = particles[i];
+                    particle.velocity.x *= particle.friction;
+                    particle.velocity.y *= particle.friction;
+                    particle.velocity.y += particle.gravity;
+                    particle.position.x += particle.velocity.x;
+                    particle.position.y += particle.velocity.y;
+                    particle.rotation += particle.spin;
+                    particle.life--;
+                    particle.alpha = (particle.life / particle.maxLife) * particle.alpha;
+                    if (particle.life <= 0) {
+                        particleContainer.removeChild(particle);
+                        particles.splice(i, 1);
+                    }
                }
           });
-                } else {
+     } else {
           console.warn("pixiApp.ticker tanımlı değil, parçacıklar güncellenmeyecek.");
      }
 
